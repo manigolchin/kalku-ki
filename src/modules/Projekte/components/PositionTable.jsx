@@ -48,6 +48,28 @@ const COLUMN_GROUPS = {
 // InlineCell - Editable number cell with debounce
 // ---------------------------------------------------------------------------
 
+/**
+ * Safely evaluate a math expression string (numbers + - * / . , () only).
+ * Returns null if invalid.
+ */
+function evalMathExpr(expr) {
+  if (!expr || typeof expr !== 'string') return null;
+  // Replace comma with dot for German decimal input
+  const cleaned = expr.replace(/,/g, '.').trim();
+  // Only allow digits, operators, dots, parens, spaces
+  if (!/^[\d\s+\-*/().]+$/.test(cleaned)) return null;
+  try {
+    // eslint-disable-next-line no-new-func
+    const result = new Function('return (' + cleaned + ')')();
+    if (typeof result === 'number' && isFinite(result) && result >= 0) {
+      return Math.round(result * 100) / 100;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 function InlineCell({ value, positionId, field, projectId, onSaved, className }) {
   const [localValue, setLocalValue] = useState(value.toString());
   const [isFocused, setIsFocused] = useState(false);
@@ -66,15 +88,17 @@ function InlineCell({ value, positionId, field, projectId, onSaved, className })
 
   const handleChange = (e) => {
     const raw = e.target.value;
+    // Block alphabet characters — only allow digits, math operators, dots, commas, parens, spaces
+    if (raw && !/^[\d\s+\-*/().,]*$/.test(raw)) return;
     setLocalValue(raw);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      const parsed = parseFloat(raw);
-      if (!isNaN(parsed) && parsed >= 0) {
-        updatePosition(projectId, positionId, { [field]: parsed });
+      const result = evalMathExpr(raw);
+      if (result !== null) {
+        updatePosition(projectId, positionId, { [field]: result });
         onSaved();
       }
-    }, 300);
+    }, 500);
   };
 
   const handleFocus = () => {
@@ -90,9 +114,10 @@ function InlineCell({ value, positionId, field, projectId, onSaved, className })
       clearTimeout(debounceRef.current);
       debounceRef.current = null;
     }
-    const parsed = parseFloat(localValue);
-    if (!isNaN(parsed) && parsed >= 0) {
-      updatePosition(projectId, positionId, { [field]: parsed });
+    const result = evalMathExpr(localValue);
+    if (result !== null) {
+      updatePosition(projectId, positionId, { [field]: result });
+      setLocalValue(result.toString());
       onSaved();
     } else {
       setLocalValue(value.toString());
