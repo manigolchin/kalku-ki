@@ -96,6 +96,32 @@ export function enrichPosition(pos, params) {
     };
   }
 
+  // If position has auto-calc results (EP, GP from engine), use those directly
+  if (pos.EP > 0 || pos.modus === 'vorhalten' || pos.modus === 'nu' || pos.modus === 'zulage') {
+    return {
+      ...pos,
+      ep: pos.EP || 0,
+      gp: pos.GP || 0,
+      ep_lohn: pos.EP_lohn || 0,
+      ep_material: pos.EP_material || 0,
+      ep_geraete: pos.EP_geraet || 0,
+      ep_nu: pos.EP_nu || 0,
+      gp_lohn: (pos.EP_lohn || 0) * (pos.quantity || 0),
+      gp_material: (pos.EP_material || 0) * (pos.quantity || 0),
+      gp_geraete: (pos.EP_geraet || 0) * (pos.quantity || 0),
+      gp_nu: (pos.EP_nu || 0) * (pos.quantity || 0),
+      actual_time: pos.Y || pos.time_minutes || 0,
+      hours_per_unit: (pos.Y || pos.time_minutes || 0) / 60,
+      hours_total: (pos.Y || pos.time_minutes || 0) * (pos.quantity || 0) / 60,
+      days_total: 0,
+      geraete_stundensatz: pos.Z || params.geraete_stundensatz,
+      material_cost: pos.X || pos.material_cost || 0,
+      time_minutes: pos.Y || pos.time_minutes || 0,
+      nu_cost: pos.M || pos.nu_cost || 0,
+    };
+  }
+
+  // Fallback: calculate from raw values (for positions without auto-calc)
   const calc = calculatePosition(
     pos.quantity || 0,
     pos.material_cost || 0,

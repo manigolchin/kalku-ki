@@ -190,6 +190,25 @@ export function setProjectPositions(projectId, positions) {
     is_header: pos.is_header || false,
     sort_order: i,
     section_path: pos.section_path || '',
+    // ─── Calculated fields from autoCalc ───
+    X: pos.X || 0,
+    Y: pos.Y || 0,
+    Z: pos.Z || 0,
+    M: pos.M || 0,
+    AA: pos.AA || null,
+    EP_lohn: pos.EP_lohn || 0,
+    EP_material: pos.EP_material || 0,
+    EP_geraet: pos.EP_geraet || 0,
+    EP_nu: pos.EP_nu || 0,
+    EP: pos.EP || 0,
+    GP: pos.GP || 0,
+    modus: pos.modus || null,
+    farbe: pos.farbe || null,
+    confidence: pos.confidence || 0,
+    classification: pos.classification || null,
+    quellen: pos.quellen || [],
+    kommentare: pos.kommentare || [],
+    warnings: pos.warnings || [],
   }));
 
   writeProjects(projects);
