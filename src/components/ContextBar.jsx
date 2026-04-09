@@ -80,7 +80,7 @@ function ParamControl({ param, value, onChange }) {
             hover:text-primary-600 cursor-pointer px-1 py-0.5 rounded
             hover:bg-white transition-all duration-200"
         >
-          {Number.isInteger(value) ? value : value.toFixed(1)}
+          {Number.isInteger(value) ? value : value.toFixed(1).replace('.', ',')}
           <span className="text-slate-400 ml-0.5 text-[10px] font-sans">{param.unit}</span>
         </button>
       )}

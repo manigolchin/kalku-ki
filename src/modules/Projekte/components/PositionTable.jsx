@@ -137,7 +137,7 @@ function InlineCell({ value, positionId, field, projectId, onSaved, className })
       inputRef.current?.blur();
     }
     if (e.key === 'Escape') {
-      setLocalValue(value.toString());
+      setLocalValue(toGerman(value));
       inputRef.current?.blur();
     }
   };

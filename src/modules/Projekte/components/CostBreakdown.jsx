@@ -126,7 +126,7 @@ export default function CostBreakdown({ summary }) {
                 <div>
                   <p className={`text-sm font-semibold ${cat.text}`}>{cat.label}</p>
                   <p className="text-[10px] text-slate-400 font-medium">
-                    Zuschlag {data.zuschlag_pct.toFixed(1)} %
+                    Zuschlag {data.zuschlag_pct.toFixed(1).replace('.', ',')} %
                   </p>
                 </div>
               </div>

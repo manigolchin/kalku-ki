@@ -287,7 +287,7 @@ export default function EFB221Rechner() {
             <div className="space-y-3">
               {components.map((comp) => {
                 const pct = (comp.value / maxComponent) * 100;
-                const anteil = result.ekt > 0 ? ((comp.value / result.ekt) * 100).toFixed(1) : 0;
+                const anteil = result.ekt > 0 ? ((comp.value / result.ekt) * 100).toFixed(1).replace('.', ',') : '0';
                 return (
                   <div key={comp.label} className="space-y-1.5">
                     <div className="flex items-center justify-between text-xs">
