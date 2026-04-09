@@ -38,6 +38,7 @@ export default function App() {
   };
 
   const needsScrollWrapper = activeModule === 'dokumente' || activeModule === 'kalkulator' || activeModule === 'projekte';
+  const isWideModule = activeModule === 'projekte';
 
   return (
     <div className="flex h-dvh overflow-hidden bg-white">
@@ -61,7 +62,7 @@ export default function App() {
       >
         {needsScrollWrapper ? (
           <div className="h-full overflow-y-auto">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+            <div className={`mx-auto py-6 sm:py-8 ${isWideModule ? 'px-4 sm:px-6' : 'max-w-7xl px-4 sm:px-6 lg:px-8'}`}>
               {renderModule()}
             </div>
           </div>

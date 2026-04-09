@@ -16,7 +16,7 @@ import {
   deleteProject,
   setProjectPositions,
 } from '../../utils/projectStore';
-import { parseGAEB } from '../../utils/gaebParser';
+import { parseGAEB, parseGAEBMeta } from '../../utils/gaebParser';
 import ProjectCard from './components/ProjectCard';
 import ProjectView from './components/ProjectView';
 
@@ -34,20 +34,20 @@ function isGaebFile(fileName) {
 // ---------------------------------------------------------------------------
 // parseGaebFile - adapter around parseGAEB that maps to position schema
 // ---------------------------------------------------------------------------
-function parseGaebFile(xmlText, fileName) {
-  const raw = parseGAEB(xmlText);
+function parseGaebFile(content, fileName) {
+  const raw = parseGAEB(content, fileName);
   return raw.map((item) => ({
     oz: item.oz || '',
     short_text: item.text || '',
-    long_text: '',
+    long_text: item.longText || '',
     hinweis_text: '',
     quantity: item.qty || 0,
     unit: item.unit || '',
     material_cost: 0,
     time_minutes: 0,
     nu_cost: 0,
-    is_header: false,
-    section_path: '',
+    is_header: item.isHeader || false,
+    section_path: item.section || '',
   }));
 }
 
@@ -257,9 +257,23 @@ function NewProjectView({ onBack, onCreated }) {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleFileUpload = (file) => {
+  const handleFileUpload = async (file) => {
     setGaebFile(file);
     setGaebFileName(file.name);
+
+    // Auto-fill project fields from GAEB metadata
+    try {
+      const buffer = await file.arrayBuffer();
+      const meta = parseGAEBMeta(buffer, file.name);
+      setForm((prev) => ({
+        ...prev,
+        name: meta.name || prev.name,
+        client: meta.client || prev.client,
+        service: meta.service || prev.service,
+      }));
+    } catch {
+      // Ignore metadata extraction errors
+    }
   };
 
   const clearGaebFile = () => {
@@ -282,8 +296,8 @@ function NewProjectView({ onBack, onCreated }) {
 
       if (gaebFile) {
         try {
-          const text = await gaebFile.text();
-          const positions = parseGaebFile(text, gaebFile.name);
+          const buffer = await gaebFile.arrayBuffer();
+          const positions = parseGaebFile(buffer, gaebFile.name);
           setProjectPositions(project.id, positions);
           toast.success(
             `Projekt erstellt mit ${positions.length} Positionen aus GAEB-Import.`,

@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, Fragment } from 'react';
 import clsx from 'clsx';
-import { ChevronRight, Columns3, Eye, EyeOff, Calculator, Plus, Trash2, GripVertical } from 'lucide-react';
+import { ChevronRight, ChevronDown, Columns3, Eye, EyeOff, Calculator, Plus, Trash2, GripVertical, FileText } from 'lucide-react';
 import { updatePosition, addPosition, deletePosition } from '../../../utils/projectStore';
 import { fmt } from '../../../utils/projectCalc';
 
@@ -243,6 +243,7 @@ export default function PositionTable({ positions, projectId, onUpdate }) {
   });
   const [activeFormula, setActiveFormula] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [expandedLangtext, setExpandedLangtext] = useState(new Set());
 
   const toggleGroup = useCallback((groupKey) => {
     setVisibleGroups((prev) => ({ ...prev, [groupKey]: !prev[groupKey] }));
@@ -250,6 +251,18 @@ export default function PositionTable({ positions, projectId, onUpdate }) {
 
   const handleCellClick = useCallback((formula) => {
     setActiveFormula(formula);
+  }, []);
+
+  const toggleLangtext = useCallback((posId) => {
+    setExpandedLangtext((prev) => {
+      const next = new Set(prev);
+      if (next.has(posId)) {
+        next.delete(posId);
+      } else {
+        next.add(posId);
+      }
+      return next;
+    });
   }, []);
 
   // Build the flat list of visible optional columns
@@ -276,8 +289,8 @@ export default function PositionTable({ positions, projectId, onUpdate }) {
     return spans;
   }, [visibleGroups]);
 
-  // Total columns: Pos(1) + Bezeichnung(1) + Mengen(2) + EingabeEK(3) + optionalCols + Ergebnis(3)
-  const totalCols = 10 + optionalColumns.length;
+  // Total columns: Pos(1) + Bezeichnung(1) + Mengen(2) + EingabeEK(3) + Geräte(2) + optionalCols + Ergebnis(3)
+  const totalCols = 12 + optionalColumns.length;
 
   // Totals
   const dataPositions = useMemo(
@@ -347,16 +360,16 @@ export default function PositionTable({ positions, projectId, onUpdate }) {
 
       {/* Table Container */}
       <div className="border border-gray-200 rounded-lg overflow-x-auto bg-white">
-        <table className="w-full border-collapse text-xs min-w-[900px]">
+        <table className="w-full border-collapse text-xs min-w-[1200px]">
           {/* ---- Group Header Row ---- */}
           <thead>
             <tr className="bg-gray-100">
               {/* Position */}
-              <th className="text-left px-2 py-2 font-semibold text-gray-600 sticky left-0 bg-gray-100 z-10 w-16">
+              <th className="text-left px-2 py-2 font-semibold text-gray-600 sticky left-0 bg-gray-100 z-10 w-28">
                 Position
               </th>
               {/* Bezeichnung */}
-              <th className="text-left px-2 py-2 font-semibold text-gray-600 min-w-[180px]">
+              <th className="text-left px-2 py-2 font-semibold text-gray-600 min-w-[280px]">
                 Bezeichnung
               </th>
               {/* Mengen */}
@@ -369,6 +382,13 @@ export default function PositionTable({ positions, projectId, onUpdate }) {
                 className="text-center px-2 py-2 font-semibold text-blue-700 border-t-2 border-blue-400"
               >
                 Eingabe EK
+              </th>
+              {/* Geräte */}
+              <th
+                colSpan={2}
+                className="text-center px-2 py-2 font-semibold text-amber-600 border-t-2 border-amber-300"
+              >
+                Geräte
               </th>
               {/* Optional group headers */}
               {Object.entries(COLUMN_GROUPS).map(([groupKey, group]) =>
@@ -393,26 +413,32 @@ export default function PositionTable({ positions, projectId, onUpdate }) {
 
             {/* ---- Column Header Row ---- */}
             <tr className="bg-gray-50 border-b border-gray-200">
-              <th className="text-left px-2 py-1.5 font-medium text-gray-500 sticky left-0 bg-gray-50 z-10">
+              <th className="text-left px-3 py-1.5 font-medium text-gray-500 sticky left-0 bg-gray-50 z-10 w-28">
                 Pos.
               </th>
-              <th className="text-left px-2 py-1.5 font-medium text-gray-500">
+              <th className="text-left px-3 py-1.5 font-medium text-gray-500">
                 Kurztext
               </th>
-              <th className="text-right px-2 py-1.5 font-medium text-gray-500 w-20">
+              <th className="text-right px-3 py-1.5 font-medium text-gray-500 w-24">
                 Menge
               </th>
-              <th className="text-center px-2 py-1.5 font-medium text-gray-500 w-12">
+              <th className="text-center px-3 py-1.5 font-medium text-gray-500 w-14">
                 Einh.
               </th>
-              <th className="text-right px-2 py-1.5 font-medium text-gray-500 w-24">
+              <th className="text-right px-3 py-1.5 font-medium text-gray-500 w-24">
+                NU EK
+              </th>
+              <th className="text-right px-3 py-1.5 font-medium text-gray-500 w-24">
                 Stoffe EK
               </th>
-              <th className="text-right px-2 py-1.5 font-medium text-gray-500 w-20">
+              <th className="text-right px-3 py-1.5 font-medium text-gray-500 w-24">
                 Zeit (min)
               </th>
-              <th className="text-right px-2 py-1.5 font-medium text-gray-500 w-24">
-                NU EK
+              <th className="text-right px-3 py-1.5 font-medium text-amber-600 w-24">
+                Zulage
+              </th>
+              <th className="text-right px-3 py-1.5 font-medium text-amber-600 w-24">
+                EP Geräte
               </th>
               {/* Optional column headers */}
               {optionalColumns.map((col) => (
@@ -427,10 +453,10 @@ export default function PositionTable({ positions, projectId, onUpdate }) {
                 </th>
               ))}
               {/* Ergebnis columns */}
-              <th className="text-right px-2 py-1.5 font-medium text-gray-500 w-24">
+              <th className="text-right px-3 py-1.5 font-medium text-gray-500 w-28">
                 EP
               </th>
-              <th className="text-right px-2 py-1.5 font-medium text-gray-500 w-28">
+              <th className="text-right px-3 py-1.5 font-medium text-gray-500 w-32">
                 GP
               </th>
               <th className="text-center px-2 py-1.5 font-medium text-gray-400 w-10" />
@@ -461,149 +487,197 @@ export default function PositionTable({ positions, projectId, onUpdate }) {
                 );
               }
 
-              // Data row
+              const hasLangtext = !!(pos.long_text && pos.long_text.trim());
+              const isExpanded = expandedLangtext.has(pos.id);
+
+              // Data row + optional Langtext expansion row
               return (
-                <tr
-                  key={pos.id}
-                  className={clsx(
-                    'group/row border-b border-gray-100 transition-colors',
-                    rowIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50',
-                    'hover:bg-blue-50/60',
-                  )}
-                >
-                  {/* Pos */}
-                  <td className="px-2 py-1.5 text-gray-500 font-mono sticky left-0 z-10 bg-inherit">
-                    {pos.oz}
-                  </td>
+                <Fragment key={pos.id}>
+                  <tr
+                    className={clsx(
+                      'group/row border-b transition-colors',
+                      isExpanded ? 'border-b-0' : 'border-gray-100',
+                      rowIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50',
+                      'hover:bg-blue-50/60',
+                    )}
+                  >
+                    {/* Pos */}
+                    <td className="px-3 py-1.5 text-gray-500 font-mono sticky left-0 z-10 bg-inherit w-28">
+                      <div className="flex items-center gap-1">
+                        {hasLangtext && (
+                          <button
+                            type="button"
+                            onClick={() => toggleLangtext(pos.id)}
+                            className={clsx(
+                              'p-0.5 rounded transition-colors shrink-0',
+                              isExpanded
+                                ? 'text-blue-500 bg-blue-50'
+                                : 'text-gray-400 hover:text-blue-500 hover:bg-blue-50',
+                            )}
+                            title={isExpanded ? 'Langtext ausblenden' : 'Langtext anzeigen'}
+                          >
+                            <FileText size={12} />
+                          </button>
+                        )}
+                        <span>{pos.oz}</span>
+                      </div>
+                    </td>
 
-                  {/* Kurztext (editable) */}
-                  <td className="px-1 py-0.5 min-w-[180px]">
-                    <InlineTextCell
-                      value={pos.short_text}
-                      positionId={pos.id}
-                      field="short_text"
-                      projectId={projectId}
-                      onSaved={onUpdate}
-                      className="text-gray-700"
-                    />
-                  </td>
+                    {/* Kurztext (read-only, from GAEB) */}
+                    <td className="px-3 py-1.5 min-w-[280px] text-gray-700 text-xs truncate max-w-[400px]" title={pos.short_text}>
+                      {pos.short_text}
+                    </td>
 
-                  {/* Menge (editable) */}
-                  <td className="px-1 py-0.5 w-20">
-                    <InlineCell
-                      value={pos.quantity}
-                      positionId={pos.id}
-                      field="quantity"
-                      projectId={projectId}
-                      onSaved={onUpdate}
-                    />
-                  </td>
+                    {/* Menge (read-only, from GAEB) */}
+                    <td className="px-3 py-1.5 text-right font-mono w-24">
+                      {fmt.number(pos.quantity)}
+                    </td>
 
-                  {/* Einheit */}
-                  <td className="px-2 py-1.5 text-center text-gray-500">
-                    {pos.unit}
-                  </td>
+                    {/* Einheit */}
+                    <td className="px-3 py-1.5 text-center text-gray-500 w-14">
+                      {pos.unit}
+                    </td>
 
-                  {/* Stoffe EK (editable, green tint) */}
-                  <td className="px-1 py-0.5 w-24">
-                    <InlineCell
-                      value={pos.material_cost}
-                      positionId={pos.id}
-                      field="material_cost"
-                      projectId={projectId}
-                      onSaved={onUpdate}
-                      className="bg-green-50/60 focus:bg-white"
-                    />
-                  </td>
+                    {/* NU EK (editable, violet tint) */}
+                    <td className="px-1 py-0.5 w-24">
+                      <InlineCell
+                        value={pos.nu_cost}
+                        positionId={pos.id}
+                        field="nu_cost"
+                        projectId={projectId}
+                        onSaved={onUpdate}
+                        className="bg-violet-50/60 focus:bg-white"
+                      />
+                    </td>
 
-                  {/* Zeit (editable, blue tint) */}
-                  <td className="px-1 py-0.5 w-20">
-                    <InlineCell
-                      value={pos.time_minutes}
-                      positionId={pos.id}
-                      field="time_minutes"
-                      projectId={projectId}
-                      onSaved={onUpdate}
-                      className="bg-blue-50/60 focus:bg-white"
-                    />
-                  </td>
+                    {/* Stoffe EK (editable, green tint) */}
+                    <td className="px-1 py-0.5 w-24">
+                      <InlineCell
+                        value={pos.material_cost}
+                        positionId={pos.id}
+                        field="material_cost"
+                        projectId={projectId}
+                        onSaved={onUpdate}
+                        className="bg-green-50/60 focus:bg-white"
+                      />
+                    </td>
 
-                  {/* NU EK (editable, violet tint) */}
-                  <td className="px-1 py-0.5 w-24">
-                    <InlineCell
-                      value={pos.nu_cost}
-                      positionId={pos.id}
-                      field="nu_cost"
-                      projectId={projectId}
-                      onSaved={onUpdate}
-                      className="bg-violet-50/60 focus:bg-white"
-                    />
-                  </td>
+                    {/* Zeit (editable, blue tint) */}
+                    <td className="px-1 py-0.5 w-20">
+                      <InlineCell
+                        value={pos.time_minutes}
+                        positionId={pos.id}
+                        field="time_minutes"
+                        projectId={projectId}
+                        onSaved={onUpdate}
+                        className="bg-blue-50/60 focus:bg-white"
+                      />
+                    </td>
 
-                  {/* Optional calculated columns */}
-                  {optionalColumns.map((col) => (
+                    {/* Zulage Geräte (display, from project settings) */}
+                    <td className="px-3 py-1.5 text-right font-mono text-amber-600 w-24">
+                      {fmt.number(pos.geraete_stundensatz || 0)}
+                    </td>
+
+                    {/* EP Geräte (calculated) */}
                     <td
-                      key={col.key}
-                      className={clsx(
-                        'px-2 py-1.5 text-right font-mono cursor-pointer hover:underline decoration-dotted',
-                        col.color || 'text-gray-600',
-                      )}
-                      onClick={() => handleCellClick(`${col.label}: ${col.formula}`)}
+                      className="px-3 py-1.5 text-right font-mono text-amber-600 w-24 cursor-pointer hover:underline decoration-dotted"
+                      onClick={() => handleCellClick('EP Geräte: EP Geräte = (Zeit/60) × Zulage Geräte')}
                       title="Klicken für Formel"
                     >
-                      {fmt.number(pos[col.key])}
+                      {fmt.number(pos.ep_geraete)}
                     </td>
-                  ))}
 
-                  {/* EP */}
-                  <td
-                    className="px-2 py-1.5 text-right font-mono font-medium text-gray-800 cursor-pointer hover:underline decoration-dotted"
-                    onClick={() => handleCellClick('EP: EP = EP Lohn + EP Stoffe + EP Geräte + EP NU')}
-                    title="Klicken für Formel"
-                  >
-                    {fmt.currency(pos.ep)}
-                  </td>
-
-                  {/* GP */}
-                  <td
-                    className="px-2 py-1.5 text-right font-mono font-semibold text-gray-900 cursor-pointer hover:underline decoration-dotted"
-                    onClick={() => handleCellClick('GP: GP = Menge × EP')}
-                    title="Klicken für Formel"
-                  >
-                    {fmt.currency(pos.gp)}
-                  </td>
-
-                  {/* Delete action */}
-                  <td className="px-1 py-1.5 text-center">
-                    {deleteConfirm === pos.id ? (
-                      <div className="inline-flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => handleDeletePosition(pos.id)}
-                          className="text-[10px] px-1.5 py-0.5 rounded bg-red-500 text-white hover:bg-red-600 transition-colors"
-                        >
-                          Ja
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeleteConfirm(null)}
-                          className="text-[10px] px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 hover:bg-gray-300 transition-colors"
-                        >
-                          Nein
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setDeleteConfirm(pos.id)}
-                        className="p-0.5 rounded text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors opacity-0 group-hover/row:opacity-100"
-                        title="Position löschen"
+                    {/* Optional calculated columns */}
+                    {optionalColumns.map((col) => (
+                      <td
+                        key={col.key}
+                        className={clsx(
+                          'px-2 py-1.5 text-right font-mono cursor-pointer hover:underline decoration-dotted',
+                          col.color || 'text-gray-600',
+                        )}
+                        onClick={() => handleCellClick(`${col.label}: ${col.formula}`)}
+                        title="Klicken für Formel"
                       >
-                        <Trash2 size={13} />
-                      </button>
-                    )}
-                  </td>
-                </tr>
+                        {fmt.number(pos[col.key])}
+                      </td>
+                    ))}
+
+                    {/* EP */}
+                    <td
+                      className="px-3 py-1.5 text-right font-mono font-medium text-gray-800 w-28 cursor-pointer hover:underline decoration-dotted"
+                      onClick={() => handleCellClick('EP: EP = EP Lohn + EP Stoffe + EP Geräte + EP NU')}
+                      title="Klicken für Formel"
+                    >
+                      {fmt.currency(pos.ep)}
+                    </td>
+
+                    {/* GP */}
+                    <td
+                      className="px-3 py-1.5 text-right font-mono font-semibold text-gray-900 w-32 cursor-pointer hover:underline decoration-dotted"
+                      onClick={() => handleCellClick('GP: GP = Menge × EP')}
+                      title="Klicken für Formel"
+                    >
+                      {fmt.currency(pos.gp)}
+                    </td>
+
+                    {/* Delete action */}
+                    <td className="px-1 py-1.5 text-center">
+                      {deleteConfirm === pos.id ? (
+                        <div className="inline-flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleDeletePosition(pos.id)}
+                            className="text-[10px] px-1.5 py-0.5 rounded bg-red-500 text-white hover:bg-red-600 transition-colors"
+                          >
+                            Ja
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteConfirm(null)}
+                            className="text-[10px] px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 hover:bg-gray-300 transition-colors"
+                          >
+                            Nein
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setDeleteConfirm(pos.id)}
+                          className="p-0.5 rounded text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors opacity-0 group-hover/row:opacity-100"
+                          title="Position löschen"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+
+                  {/* Langtext expansion row */}
+                  {hasLangtext && isExpanded && (
+                    <tr className={clsx(
+                      'border-b border-gray-100',
+                      rowIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50',
+                    )}>
+                      <td colSpan={totalCols} className="px-2 py-0 overflow-hidden">
+                        <div className="flex gap-3 py-2.5 pl-6 pr-2">
+                          <div className="w-0.5 shrink-0 rounded-full bg-blue-200" />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 mb-1.5">
+                              <FileText size={11} className="text-blue-500 shrink-0" />
+                              <span className="text-[10px] font-semibold text-blue-600 uppercase tracking-wider">
+                                Langtext
+                              </span>
+                            </div>
+                            <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-wrap break-words max-h-48 overflow-y-auto">
+                              {pos.long_text}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               );
             })}
 
@@ -611,6 +685,8 @@ export default function PositionTable({ positions, projectId, onUpdate }) {
             <tr className="bg-gray-100 border-t-2 border-gray-300 font-semibold">
               <td className="px-2 py-2 sticky left-0 bg-gray-100 z-10" />
               <td className="px-2 py-2 text-gray-700">Summe</td>
+              <td className="px-2 py-2" />
+              <td className="px-2 py-2" />
               <td className="px-2 py-2" />
               <td className="px-2 py-2" />
               <td className="px-2 py-2" />
@@ -673,6 +749,10 @@ export default function PositionTable({ positions, projectId, onUpdate }) {
         {/* Right: Legend & total */}
         <div className="flex items-center gap-3">
           <span className="inline-flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-violet-400" />
+            NU
+          </span>
+          <span className="inline-flex items-center gap-1">
             <span className="w-2 h-2 rounded-full bg-green-400" />
             Stoffe
           </span>
@@ -681,8 +761,8 @@ export default function PositionTable({ positions, projectId, onUpdate }) {
             Zeit
           </span>
           <span className="inline-flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-violet-400" />
-            NU
+            <span className="w-2 h-2 rounded-full bg-amber-400" />
+            Geräte
           </span>
           <span className="font-medium text-gray-700 ml-2">
             GP: {fmt.currency(totals.gp)}

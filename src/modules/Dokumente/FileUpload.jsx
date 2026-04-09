@@ -92,9 +92,9 @@ export default function FileUpload({ onFileProcessed, isProcessing }) {
           }
           case 'xml': {
             setParseProgress('GAEB-XML wird gelesen...');
-            const text = await readFileAsText(file);
             const { parseGAEB } = await import('../../utils/gaebParser');
-            content = parseGAEB(text);
+            const buffer = await file.arrayBuffer();
+            content = parseGAEB(buffer, file.name);
             break;
           }
           case 'docx': {

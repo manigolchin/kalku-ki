@@ -2,9 +2,9 @@ import { useState, useCallback, useMemo } from 'react';
 import { ArrowLeft, Table2, BarChart3, Settings, Upload, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
-import { getProject, setProjectPositions } from '../../../utils/projectStore';
+import { getProject, setProjectPositions, updateProjectMeta } from '../../../utils/projectStore';
 import { enrichPosition, calculateProjectSummary } from '../../../utils/projectCalc';
-import { parseGAEB } from '../../../utils/gaebParser';
+import { parseGAEB, parseGAEBMeta } from '../../../utils/gaebParser';
 import ProjectHeader from './ProjectHeader';
 import PositionTable from './PositionTable';
 import CostBreakdown from './CostBreakdown';
@@ -108,8 +108,8 @@ export default function ProjectView({ projectId, onBack, onRefresh }) {
 
   const handleUploadGaeb = useCallback(async (file) => {
     try {
-      const text = await file.text();
-      const parsed = parseGAEB(text, file.name);
+      const buffer = await file.arrayBuffer();
+      const parsed = parseGAEB(buffer, file.name);
       if (!parsed || parsed.length === 0) {
         toast.error('Keine Positionen in der GAEB-Datei gefunden');
         return;
@@ -130,6 +130,19 @@ export default function ProjectView({ projectId, onBack, onRefresh }) {
         section_path: p.section || '',
       }));
       setProjectPositions(projectId, positions);
+
+      // Auto-fill project metadata from GAEB if fields are empty
+      try {
+        const meta = parseGAEBMeta(buffer, file.name);
+        const updates = {};
+        if (meta.name && !project.name) updates.name = meta.name;
+        if (meta.client && !project.client) updates.client = meta.client;
+        if (meta.service && !project.service) updates.service = meta.service;
+        if (Object.keys(updates).length > 0) {
+          updateProjectMeta(projectId, updates);
+        }
+      } catch { /* ignore metadata errors */ }
+
       triggerRefresh();
       toast.success(`${positions.filter((p) => !p.is_header).length} Positionen importiert`);
     } catch (err) {

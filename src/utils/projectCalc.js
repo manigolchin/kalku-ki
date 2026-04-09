@@ -104,7 +104,7 @@ export function enrichPosition(pos, params) {
     params,
   );
 
-  return { ...pos, ...calc };
+  return { ...pos, ...calc, geraete_stundensatz: params.geraete_stundensatz };
 }
 
 // ---------------------------------------------------------------------------
@@ -248,29 +248,43 @@ export function exportProjectToExcel(project, enrichedPositions, summary) {
     wsSummary['!cols'] = [{ wch: 20 }, { wch: 16 }, { wch: 12 }, { wch: 16 }, { wch: 16 }];
     utils.book_append_sheet(wb, wsSummary, 'Zusammenfassung');
 
-    // Positions sheet
-    const posHeaders = ['Pos', 'Bezeichnung', 'Menge', 'Einheit', 'Stoffe EK', 'Zeit (min)', 'NU EK', 'EP Lohn', 'EP Stoffe', 'EP Geraete', 'EP NU', 'EP', 'GP'];
+    // Positions sheet — matches table column order
+    const posHeaders = [
+      'Pos', 'Bezeichnung', 'Langtext', 'Menge', 'Einheit',
+      'NU EK', 'Stoffe EK', 'Zeit (min)',
+      'Zulage Geräte', 'EP Geräte', 'EP Löhne', 'EP Stoffe VK', 'EP NU',
+      'EP', 'GP',
+      'GP Löhne', 'GP Stoffe', 'GP Geräte', 'GP NU',
+    ];
     const posRows = enrichedPositions.map((p) => {
       if (p.is_header) {
-        return [p.oz, p.short_text, '', '', '', '', '', '', '', '', '', '', ''];
+        return [p.oz, p.short_text, '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''];
       }
       return [
-        p.oz, p.short_text, p.quantity, p.unit,
-        p.material_cost, p.time_minutes, p.nu_cost,
-        p.ep_lohn, p.ep_material, p.ep_geraete, p.ep_nu,
+        p.oz, p.short_text, p.long_text || '', p.quantity, p.unit,
+        p.nu_cost, p.material_cost, p.time_minutes,
+        p.geraete_stundensatz || 0, p.ep_geraete, p.ep_lohn, p.ep_material, p.ep_nu,
         p.ep, p.gp,
+        p.gp_lohn, p.gp_material, p.gp_geraete, p.gp_nu,
       ];
     });
 
     // Add total row
-    posRows.push(['', 'SUMME', '', '', '', '', '', '', '', '', '', '', summary.netto]);
+    const emptyBefore = new Array(13).fill('');
+    posRows.push([
+      '', 'SUMME', ...emptyBefore.slice(0, 11),
+      '', summary.netto,
+      summary.breakdown.lohn.vk, summary.breakdown.stoffe.vk,
+      summary.breakdown.geraete.vk, summary.breakdown.nu.vk,
+    ]);
 
     const wsPositions = utils.aoa_to_sheet([posHeaders, ...posRows]);
     wsPositions['!cols'] = [
-      { wch: 12 }, { wch: 40 }, { wch: 10 }, { wch: 8 },
-      { wch: 12 }, { wch: 10 }, { wch: 12 },
-      { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
+      { wch: 14 }, { wch: 45 }, { wch: 60 }, { wch: 12 }, { wch: 8 },
+      { wch: 12 }, { wch: 12 }, { wch: 12 },
+      { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
       { wch: 14 }, { wch: 16 },
+      { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 },
     ];
     utils.book_append_sheet(wb, wsPositions, 'Positionen');
 

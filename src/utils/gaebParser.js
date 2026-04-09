@@ -12,11 +12,16 @@
 
 /**
  * Parse a GAEB file (XML or ASCII) and extract all positions.
- * @param {string} content - File content as string
+ * @param {string|ArrayBuffer} content - File content as string or ArrayBuffer
  * @param {string} [fileName] - Optional filename for format detection
  * @returns {Array<{oz, text, longText, qty, unit, section, isHeader}>}
  */
 export function parseGAEB(content, fileName) {
+  // Handle ArrayBuffer input — needed for D83/P83 files (CP437 encoding)
+  if (content instanceof ArrayBuffer) {
+    content = decodeGaebBuffer(content, fileName);
+  }
+
   if (!content || typeof content !== 'string') {
     throw new Error('Kein gültiger Inhalt übergeben.');
   }
@@ -42,6 +47,29 @@ export function parseGAEB(content, fileName) {
       'Unbekanntes GAEB-Format. Unterstützt: GAEB DA XML 3.x, GAEB 2000, GAEB 83 ASCII.'
     );
   }
+}
+
+/**
+ * Extract project metadata from a GAEB file.
+ * @param {string|ArrayBuffer} content - File content
+ * @param {string} [fileName] - Optional filename
+ * @returns {{ name, client, service, tender_number }}
+ */
+export function parseGAEBMeta(content, fileName) {
+  if (content instanceof ArrayBuffer) {
+    content = decodeGaebBuffer(content, fileName);
+  }
+  if (!content || typeof content !== 'string') return {};
+
+  const trimmed = content.trim();
+
+  if (isXmlFormat(trimmed)) {
+    return extractXmlMeta(trimmed);
+  }
+  if (isD83Format(trimmed, fileName) || isGaeb2000Tagged(trimmed)) {
+    return extractD83Meta(trimmed);
+  }
+  return {};
 }
 
 // ============================================================================
@@ -79,108 +107,336 @@ function isD83Format(content, fileName) {
 }
 
 // ============================================================================
-// XML PARSER (X83/X84)
+// ENCODING — CP437 decoding for GAEB 83 ASCII files
 // ============================================================================
 
-const ITEM_SELECTORS = ['Item', 'BoQItem', 'Position'];
+// CP437 to Unicode mapping for bytes 0x80–0xFF
+const CP437_HIGH = '\u00C7\u00FC\u00E9\u00E2\u00E4\u00E0\u00E5\u00E7\u00EA\u00EB\u00E8\u00EF\u00EE\u00EC\u00C4\u00C5\u00C9\u00E6\u00C6\u00F4\u00F6\u00F2\u00FB\u00F9\u00FF\u00D6\u00DC\u00A2\u00A3\u00A5\u20A7\u0192\u00E1\u00ED\u00F3\u00FA\u00F1\u00D1\u00AA\u00BA\u00BF\u2310\u00AC\u00BD\u00BC\u00A1\u00AB\u00BB\u2591\u2592\u2593\u2502\u2524\u2561\u2562\u2556\u2555\u2563\u2551\u2557\u255D\u255C\u255B\u2510\u2514\u2534\u252C\u251C\u2500\u253C\u255E\u255F\u255A\u2554\u2569\u2566\u2560\u2550\u256C\u2567\u2568\u2564\u2565\u2559\u2558\u2552\u2553\u256B\u256A\u2518\u250C\u2588\u2584\u258C\u2590\u2580\u03B1\u00DF\u0393\u03C0\u03A3\u03C3\u00B5\u03C4\u03A6\u0398\u03A9\u03B4\u221E\u03C6\u03B5\u2229\u2261\u00B1\u2265\u2264\u2320\u2321\u00F7\u2248\u00B0\u2219\u00B7\u221A\u207F\u00B2\u25A0\u00A0';
 
-const FIELD_SELECTORS = {
-  oz: ['Itemno', 'OZ', 'Nr', 'RNoPart'],
-  text: ['Description > Text', 'Kurztext', 'ShortText', 'OutlineText > TextOutlTxt > span', 'Langtext'],
-  qty: ['Qty', 'Menge', 'Quantity'],
-  unit: ['QU', 'Einheit', 'Unit', 'BaseUnit'],
-};
+function decodeCP437(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let result = '';
+  for (let i = 0; i < bytes.length; i++) {
+    const b = bytes[i];
+    if (b < 0x80) {
+      result += String.fromCharCode(b);
+    } else {
+      result += CP437_HIGH[b - 0x80];
+    }
+  }
+  return result;
+}
+
+/**
+ * Decode a GAEB file buffer with the correct encoding.
+ * XML files are UTF-8, D83/P83 ASCII files use CP437.
+ */
+function decodeGaebBuffer(buffer, fileName) {
+  const bytes = new Uint8Array(buffer);
+  // Quick check: if it starts with XML declaration or <GAEB, use UTF-8
+  const head = String.fromCharCode(...bytes.slice(0, 20));
+  if (head.startsWith('<?xml') || head.startsWith('<GAEB') || head.startsWith('<gaeb')) {
+    return new TextDecoder('utf-8').decode(buffer);
+  }
+  // Check for GAEB 2000 tagged format
+  const headLong = String.fromCharCode(...bytes.slice(0, Math.min(500, bytes.length)));
+  if (headLong.includes('#begin[GAEB]')) {
+    return new TextDecoder('utf-8').decode(buffer);
+  }
+  // D83/P83: use CP437
+  return decodeCP437(buffer);
+}
+
+// ============================================================================
+// XML PARSER (X83/X84) — Hierarchical BoQ walker
+// ============================================================================
 
 function parseGaebXml(xmlString) {
   const parser = new DOMParser();
-  const doc = parser.parseFromString(xmlString, 'application/xml');
 
-  const parseError = doc.querySelector('parsererror');
-  if (parseError) {
-    throw new Error(`XML-Parsing-Fehler: ${parseError.textContent.substring(0, 200)}`);
+  // Try with namespaces first, then without
+  let doc = parser.parseFromString(xmlString, 'application/xml');
+  if (doc.querySelector('parsererror')) {
+    throw new Error(`XML-Parsing-Fehler: ${doc.querySelector('parsererror').textContent.substring(0, 200)}`);
   }
 
-  let items = findItems(doc);
+  // Remove namespaces for reliable querySelector usage
+  const cleanedXml = removeNamespaces(xmlString);
+  const cleanDoc = parser.parseFromString(cleanedXml, 'application/xml');
+  if (!cleanDoc.querySelector('parsererror')) {
+    doc = cleanDoc;
+  }
 
-  if (items.length === 0) {
-    const cleanedXml = removeNamespaces(xmlString);
-    const cleanDoc = parser.parseFromString(cleanedXml, 'application/xml');
-    if (!cleanDoc.querySelector('parsererror')) {
-      items = findItems(cleanDoc);
+  // Find the BoQ body — walk BoQCtgy hierarchy
+  const boqBody = doc.querySelector('BoQBody') || doc.querySelector('boqbody');
+  if (boqBody) {
+    const positions = [];
+    walkBoQBody(boqBody, [], positions);
+    if (positions.length > 0) return positions;
+  }
+
+  // Fallback: flat Item scan (for non-standard GAEB XML)
+  const items = doc.querySelectorAll('Item, BoQItem, Position');
+  if (items.length > 0) {
+    const positions = [];
+    for (const el of items) {
+      const pos = extractXmlItem(el, '');
+      if (pos) positions.push(pos);
     }
+    if (positions.length > 0) return positions;
   }
 
-  if (items.length === 0) {
-    throw new Error(
-      'Keine Positionen im GAEB-Dokument gefunden. Unterstützte Formate: GAEB DA XML 3.x (DA83, DA86).'
-    );
-  }
-
-  return items;
+  throw new Error(
+    'Keine Positionen im GAEB-Dokument gefunden. Unterstützte Formate: GAEB DA XML 3.x (DA83, DA86).'
+  );
 }
 
-function findItems(doc) {
-  const positions = [];
+/**
+ * Recursively walk BoQBody > BoQCtgy hierarchy to build OZ numbers and extract items.
+ */
+function walkBoQBody(bodyEl, ozPrefix, positions) {
+  for (const child of bodyEl.children) {
+    const tag = (child.localName || child.tagName || '').toLowerCase();
 
-  for (const selector of ITEM_SELECTORS) {
-    const elements = doc.querySelectorAll(selector);
-    if (elements.length > 0) {
-      for (const el of elements) {
-        const position = extractPosition(el);
-        if (position) positions.push(position);
+    if (tag === 'boqctgy') {
+      const rnoPart = child.getAttribute('RNoPart') || child.getAttribute('rnopart') || '';
+      const currentOz = [...ozPrefix, rnoPart];
+      const ozStr = formatXmlOz(currentOz);
+
+      // Extract category label from LblTx
+      const lblTx = directChild(child, 'LblTx');
+      if (lblTx) {
+        const label = stripHtml(lblTx.textContent || '');
+        if (label) {
+          positions.push({
+            oz: ozStr,
+            text: label,
+            longText: '',
+            qty: 0,
+            unit: '',
+            section: label,
+            isHeader: true,
+          });
+        }
       }
-      break;
+
+      // Recurse into nested BoQBody
+      const nestedBody = directChild(child, 'BoQBody');
+      if (nestedBody) {
+        walkBoQBody(nestedBody, currentOz, positions);
+      }
+
+    } else if (tag === 'itemlist') {
+      // Process children: Remark (Vorbemerkungen) and Item elements
+      for (const item of child.children) {
+        const itemTag = (item.localName || item.tagName || '').toLowerCase();
+        if (itemTag === 'remark') {
+          const remarkPos = extractXmlRemark(item, ozPrefix);
+          if (remarkPos) positions.push(remarkPos);
+        } else if (itemTag === 'item' || itemTag === 'boqitem') {
+          const pos = extractXmlItem(item, ozPrefix);
+          if (pos) positions.push(pos);
+        }
+      }
     }
   }
-
-  if (positions.length === 0) {
-    const allElements = doc.querySelectorAll('*');
-    for (const el of allElements) {
-      const tagName = el.localName || el.tagName || '';
-      if (/^(item|boqitem|position)$/i.test(tagName)) {
-        const position = extractPosition(el);
-        if (position) positions.push(position);
-      }
-    }
-  }
-
-  return positions;
 }
 
-function extractPosition(el) {
-  const oz = findFieldValue(el, FIELD_SELECTORS.oz) || '';
-  const text = findFieldValue(el, FIELD_SELECTORS.text) || '';
-  const qtyStr = findFieldValue(el, FIELD_SELECTORS.qty) || '0';
-  const unit = findFieldValue(el, FIELD_SELECTORS.unit) || '';
+/**
+ * Extract a position from an Item element.
+ */
+function extractXmlItem(el, ozPrefix) {
+  const rnoPart = el.getAttribute('RNoPart') || el.getAttribute('rnopart') || '';
+  const itemOzParts = Array.isArray(ozPrefix) ? [...ozPrefix, rnoPart] : [rnoPart];
+  const oz = formatXmlOz(itemOzParts);
 
-  if (!oz && !text) return null;
+  // Kurztext: OutlineText > OutlTxt > TextOutlTxt
+  const kurztext = extractOutlineText(el);
+
+  // Langtext: DetailTxt > Text (full description with line breaks)
+  const langtext = extractDetailText(el);
+
+  // Quantity — GAEB XML always uses standard decimal (dot = decimal separator)
+  const qtyEl = directChild(el, 'Qty') || el.querySelector('Qty');
+  const qty = qtyEl ? (parseFloat(qtyEl.textContent) || 0) : 0;
+
+  // Unit
+  const quEl = directChild(el, 'QU') || el.querySelector('QU');
+  const unit = quEl ? quEl.textContent.trim() : '';
+
+  const text = kurztext || (langtext ? langtext.split('\n')[0] : '');
+  if (!oz && !text && !langtext) return null;
 
   return {
-    oz: oz.trim(),
+    oz,
     text: cleanText(text),
-    qty: parseGermanNumber(qtyStr),
-    unit: unit.trim(),
+    longText: langtext,
+    qty,
+    unit: unit,
     ep: null,
     isHeader: false,
   };
 }
 
-function findFieldValue(parent, selectors) {
-  for (const selector of selectors) {
+/**
+ * Extract a Remark (Vorbemerkung) element as a non-priced position.
+ */
+function extractXmlRemark(el, ozPrefix) {
+  const kurztext = extractOutlineText(el);
+  const langtext = extractDetailText(el);
+  const text = kurztext || (langtext ? langtext.split('\n')[0] : '');
+  if (!text && !langtext) return null;
+
+  return {
+    oz: '',
+    text: cleanText(text),
+    longText: langtext,
+    qty: 0,
+    unit: '',
+    ep: null,
+    isHeader: false,
+  };
+}
+
+/**
+ * Extract Kurztext from OutlineText > OutlTxt > TextOutlTxt, stripping HTML.
+ */
+function extractOutlineText(el) {
+  // Try nested path first
+  const outlinePaths = [
+    'Description CompleteText OutlineText OutlTxt TextOutlTxt',
+    'Description OutlineText OutlTxt TextOutlTxt',
+    'OutlineText OutlTxt TextOutlTxt',
+    'Description CompleteText OutlineText TextOutlTxt',
+  ];
+  for (const path of outlinePaths) {
     try {
-      const el = parent.querySelector(selector);
-      if (el && el.textContent) return el.textContent;
+      const found = el.querySelector(path.split(' ').join(' > '));
+      if (found && found.textContent.trim()) return stripHtml(found.textContent);
+    } catch { /* ignore selector errors */ }
+  }
+  // Fallback: try getElementsByTagName
+  const tags = el.getElementsByTagName('TextOutlTxt');
+  if (tags.length > 0 && tags[0].textContent.trim()) return stripHtml(tags[0].textContent);
+
+  // Last fallback: ShortText / Kurztext
+  for (const tag of ['ShortText', 'Kurztext']) {
+    const found = el.getElementsByTagName(tag);
+    if (found.length > 0 && found[0].textContent.trim()) return stripHtml(found[0].textContent);
+  }
+  return '';
+}
+
+/**
+ * Extract Langtext from DetailTxt > Text, converting HTML paragraphs to plain text.
+ */
+function extractDetailText(el) {
+  const detailPaths = [
+    'Description CompleteText DetailTxt Text',
+    'Description DetailTxt Text',
+    'CompleteText DetailTxt Text',
+    'DetailTxt Text',
+  ];
+  for (const path of detailPaths) {
+    try {
+      const found = el.querySelector(path.split(' ').join(' > '));
+      if (found) {
+        const text = htmlToPlainText(found);
+        if (text.trim()) return text.trim();
+      }
     } catch { /* ignore */ }
-    const tagName = selector.split('>').pop().trim().split(' ').pop();
-    const elements = parent.getElementsByTagName(tagName);
-    if (elements.length > 0 && elements[0].textContent) {
-      return elements[0].textContent;
+  }
+  // Fallback via getElementsByTagName
+  const detailTxts = el.getElementsByTagName('DetailTxt');
+  if (detailTxts.length > 0) {
+    const textEls = detailTxts[0].getElementsByTagName('Text');
+    if (textEls.length > 0) {
+      const text = htmlToPlainText(textEls[0]);
+      if (text.trim()) return text.trim();
     }
   }
-  for (const selector of selectors) {
-    const attrName = selector.toLowerCase();
-    if (parent.hasAttribute(attrName)) {
-      return parent.getAttribute(attrName);
+  // Last fallback: try Langtext element directly
+  const langEls = el.getElementsByTagName('Langtext');
+  if (langEls.length > 0 && langEls[0].textContent.trim()) {
+    return stripHtml(langEls[0].textContent);
+  }
+  return '';
+}
+
+/**
+ * Convert HTML-like GAEB XML text (with <p>, <span>, <br/>) to plain text
+ * preserving paragraph breaks.
+ */
+function htmlToPlainText(el) {
+  const lines = [];
+  for (const child of el.children) {
+    const tag = (child.localName || child.tagName || '').toLowerCase();
+    if (tag === 'p') {
+      // Walk the <p> collecting text from spans, separated by br
+      const segments = [];
+      walkTextNode(child, segments);
+      const text = segments.join('\n').trim();
+      if (text) lines.push(text);
+    }
+  }
+  if (lines.length > 0) return lines.join('\n');
+  // Fallback: just get text content
+  return stripHtml(el.textContent || '');
+}
+
+/**
+ * Walk a DOM node collecting text, treating <br> as line break.
+ */
+function walkTextNode(node, segments) {
+  for (const child of node.childNodes) {
+    const tag = (child.localName || child.tagName || child.nodeName || '').toLowerCase();
+    if (child.nodeType === 3) {
+      // Text node
+      const t = child.textContent.trim();
+      if (t) {
+        if (segments.length === 0) segments.push(t);
+        else segments[segments.length - 1] += (segments[segments.length - 1] ? ' ' : '') + t;
+      }
+    } else if (tag === 'br') {
+      segments.push('');
+    } else if (tag === 'span' || tag === 'b' || tag === 'i' || tag === 'strong' || tag === 'em') {
+      const t = child.textContent.trim();
+      if (t) {
+        if (segments.length === 0) segments.push(t);
+        else segments[segments.length - 1] += (segments[segments.length - 1] ? ' ' : '') + t;
+      }
+    } else {
+      walkTextNode(child, segments);
+    }
+  }
+}
+
+/**
+ * Format OZ from parts array: ['1', '2', '3'] => '1. 2.   3'
+ * Matches the format seen in the Excel: ' 1. 2.   3'
+ */
+function formatXmlOz(parts) {
+  const filtered = parts.filter(Boolean);
+  if (filtered.length === 0) return '';
+  return filtered.map((p) => p.trim()).join('.');
+}
+
+/**
+ * Strip HTML tags from text content.
+ */
+function stripHtml(text) {
+  if (!text) return '';
+  return text.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Find a direct child element by tag name (case-insensitive).
+ */
+function directChild(parent, tagName) {
+  const lower = tagName.toLowerCase();
+  for (const child of parent.children) {
+    if ((child.localName || child.tagName || '').toLowerCase() === lower) {
+      return child;
     }
   }
   return null;
@@ -397,7 +653,7 @@ function formatGaeb2000Oz(rawOz, segments) {
 // D83/P83 FIXED-WIDTH ASCII FORMAT PARSER
 // ============================================================================
 
-const UNIT_PATTERN = /(?:psch|Psch|PSCH|Stck|Stk|STK|lfm|LFM|cbm|qm|Std|Tag|m2|m3|m²|m³|kg|KG|St|ha|km|cm|mm|h|t|l|m)/;
+const UNIT_PATTERN = /(?:psch|Psch|PSCH|Stck|Stk|STK|StWo|StMt|lfdm|lfm|LFM|cbm|qm|Std|Tag|mWo|m2|m3|m²|m³|kg|KG|St|ha|km|cm|mm|h|t|l|m)/;
 const UNIT_MAP = { m2: 'm²', m3: 'm³', stk: 'St', stck: 'St', cbm: 'm³', qm: 'm²' };
 const UNIT_CODES = {
   '0000': 'psch', '0001': 'm', '0002': 'm²', '0003': 'm³',
@@ -442,6 +698,14 @@ function parseD83Content(content) {
 
     // Section (SA 11)
     if (sa === '11') {
+      // Flush any pending position before starting new section
+      if (currentPosition) {
+        if (langtextLines.length) currentPosition.longText = langtextLines.join('\n');
+        positions.push(currentPosition);
+        currentPosition = null;
+        langtextLines = [];
+      }
+
       const ozField = line.substring(2, Math.min(14, line.length));
       const ozDigits = ozField.replace(/\D/g, '');
       if (ozDigits) {
@@ -517,17 +781,23 @@ function parseD83Content(content) {
 }
 
 function prescanD83Segments(lines) {
-  const sectionDigitLengths = new Set();
+  const digitLengths = new Set();
   for (const line of lines) {
     if (line.length < 2) continue;
-    if (line.substring(0, 2).trim() === '11') {
+    const sa = line.substring(0, 2).trim();
+    if (sa === '11') {
       const ozField = line.substring(2, Math.min(14, line.length));
       const ozDigits = ozField.replace(/\D/g, '');
-      if (ozDigits) sectionDigitLengths.add(ozDigits.length);
+      if (ozDigits) digitLengths.add(ozDigits.length);
+    } else if (sa === '21') {
+      // Also scan item lines for full OZ length
+      const ozField = line.substring(2, Math.min(14, line.length));
+      const ozDigits = ozField.replace(/\D/g, '');
+      if (ozDigits) digitLengths.add(ozDigits.length);
     }
   }
-  if (sectionDigitLengths.size === 0) return [];
-  const sorted = [...sectionDigitLengths].sort((a, b) => a - b);
+  if (digitLengths.size === 0) return [];
+  const sorted = [...digitLengths].sort((a, b) => a - b);
   const segs = [sorted[0]];
   for (let i = 1; i < sorted.length; i++) segs.push(sorted[i] - sorted[i - 1]);
   return segs;
@@ -549,15 +819,13 @@ function formatOzWithSegments(allDigits, segments) {
 function formatOz(ozRaw) {
   ozRaw = ozRaw.trim();
   if (ozRaw.includes('.') && !ozRaw.includes(' ')) {
-    const parts = ozRaw.split('.');
-    if (parts.length >= 3) {
-      return `${parseInt(parts[0]) || parts[0]}.${parseInt(parts[1]) || parts[1]}.${parseInt(parts[2]) || parts[2]}`;
-    }
+    return ozRaw;
   }
   const digits = ozRaw.replace(/\D/g, '');
   if (!digits) return ozRaw;
-  if (digits.length >= 6) return `${parseInt(digits.substring(0, 2))}.${parseInt(digits.substring(2, 4))}.${parseInt(digits.substring(4))}`;
-  if (digits.length >= 4) return `${parseInt(digits.substring(0, 2))}.${parseInt(digits.substring(2))}`;
+  // Default segment guess: [2, 2, remaining]
+  if (digits.length >= 6) return `${digits.substring(0, 2)}.${digits.substring(2, 4)}.${digits.substring(4)}`;
+  if (digits.length >= 4) return `${digits.substring(0, 2)}.${digits.substring(2)}`;
   return digits;
 }
 
@@ -662,6 +930,69 @@ function parseGermanNumber(str) {
     return parseFloat(cleaned.replace(',', '.')) || 0;
   }
   return parseFloat(cleaned) || 0;
+}
+
+// ============================================================================
+// PROJECT METADATA EXTRACTION
+// ============================================================================
+
+function extractXmlMeta(xmlString) {
+  const parser = new DOMParser();
+  const cleanedXml = removeNamespaces(xmlString);
+  const doc = parser.parseFromString(cleanedXml, 'application/xml');
+  if (doc.querySelector('parsererror')) return {};
+
+  const meta = {};
+
+  // Project name: PrjInfo > NamePrj or LblPrj
+  const namePrj = doc.querySelector('PrjInfo > LblPrj') || doc.querySelector('PrjInfo > NamePrj');
+  if (namePrj) meta.name = stripHtml(namePrj.textContent);
+
+  // Client: OWN > Address > Name1
+  const ownName = doc.querySelector('OWN > Address > Name1');
+  if (ownName) meta.client = stripHtml(ownName.textContent);
+
+  // Service from BoQ > Info > Name
+  const boqName = doc.querySelector('BoQInfo > Name') || doc.querySelector('BoQInfo > NameBoQ');
+  if (boqName) {
+    const svc = stripHtml(boqName.textContent);
+    // Only use if it's a real name (not just a number)
+    if (svc && svc.length > 2 && !/^\d+$/.test(svc)) meta.service = svc;
+  }
+
+  return meta;
+}
+
+function extractD83Meta(content) {
+  const meta = {};
+  const lines = content.split(/\r?\n/);
+
+  for (const line of lines.slice(0, 30)) {
+    if (line.length < 3) continue;
+    const sa = line.substring(0, 2).trim();
+    // Strip trailing 6-digit line numbers and extra whitespace
+    const rawText = line.substring(2, Math.min(line.length, 74)).replace(/\s*\d{6}\s*$/, '').trim();
+
+    // SA 01: LV-Bezeichnung (project/service name)
+    if (sa === '01' && rawText && !meta.service) {
+      meta.service = rawText;
+    }
+    // SA 02: BV-Bezeichnung (project name)
+    if (sa === '02' && rawText && !meta.name) {
+      meta.name = rawText;
+    }
+    // SA 03: Auftraggeber (client)
+    if (sa === '03' && rawText && !meta.client) {
+      meta.client = rawText;
+    }
+  }
+
+  // If no BV name, use service as name
+  if (!meta.name && meta.service) {
+    meta.name = meta.service;
+  }
+
+  return meta;
 }
 
 function cleanText(text) {
