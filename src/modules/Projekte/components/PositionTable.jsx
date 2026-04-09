@@ -49,7 +49,15 @@ const COLUMN_GROUPS = {
 // ---------------------------------------------------------------------------
 
 /**
+ * Convert a number to German display format: 49.9 → "49,9"
+ */
+function toGerman(v) {
+  return v.toString().replace('.', ',');
+}
+
+/**
  * Safely evaluate a math expression string (numbers + - * / . , () only).
+ * Supports German decimal comma: 2,5 → 2.5
  * Returns null if invalid.
  */
 function evalMathExpr(expr) {
@@ -71,13 +79,13 @@ function evalMathExpr(expr) {
 }
 
 function InlineCell({ value, positionId, field, projectId, onSaved, className }) {
-  const [localValue, setLocalValue] = useState(value.toString());
+  const [localValue, setLocalValue] = useState(toGerman(value));
   const [isFocused, setIsFocused] = useState(false);
   const debounceRef = useRef(null);
   const inputRef = useRef(null);
 
   useEffect(() => {
-    if (!isFocused) setLocalValue(value.toString());
+    if (!isFocused) setLocalValue(toGerman(value));
   }, [value, isFocused]);
 
   useEffect(() => {
@@ -117,10 +125,10 @@ function InlineCell({ value, positionId, field, projectId, onSaved, className })
     const result = evalMathExpr(localValue);
     if (result !== null) {
       updatePosition(projectId, positionId, { [field]: result });
-      setLocalValue(result.toString());
+      setLocalValue(toGerman(result));
       onSaved();
     } else {
-      setLocalValue(value.toString());
+      setLocalValue(toGerman(value));
     }
   };
 
