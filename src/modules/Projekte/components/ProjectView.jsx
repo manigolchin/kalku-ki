@@ -6,7 +6,8 @@ import { getProject, setProjectPositions, updateProjectMeta } from '../../../uti
 import { enrichPosition, calculateProjectSummary } from '../../../utils/projectCalc';
 import { parseGAEB, parseGAEBMeta } from '../../../utils/gaebParser';
 import { autoCalculate } from '../../../engine/autoCalc';
-import { loadSiradosData, isSiradosLoaded } from '../../../engine/siradosSearch';
+// SIRADOS DEAKTIVIERT (CLAUDE.md v1.3 Preisquellen-Policy)
+// import { loadSiradosData, isSiradosLoaded } from '../../../engine/siradosSearch';
 import { getAngebote } from '../../../engine/angebotExtractor';
 import { matchAngeboteToLV, selectBestSuppliers, buildPriceMap } from '../../../engine/supplierMatcher';
 import { log, logError } from '../../../engine/logger';
@@ -197,21 +198,8 @@ export default function ProjectView({ projectId, onBack, onRefresh }) {
     setAutoCalcProgress({ step: 'start', current: 0, total: project.positions.length });
 
     try {
-      // Load Sirados data if not already loaded
-      if (!isSiradosLoaded()) {
-        setAutoCalcProgress({ step: 'sirados_load', current: 0, total: 0 });
-        try {
-          const resp = await fetch('/sirados_positions.json');
-          if (resp.ok) {
-            const data = await resp.json();
-            loadSiradosData(data);
-            toast.success(`Sirados: ${data.length} Positionen geladen`);
-          }
-        } catch {
-          // Sirados optional — continue without it
-          console.warn('Sirados data not available — continuing without');
-        }
-      }
+      // SIRADOS DEAKTIVIERT (CLAUDE.md v1.3 Preisquellen-Policy)
+      // Waterfall: Angebote → PDB → KB erfahrungspreise → Web (rot)
 
       // Run auto-calculation
       const result = await autoCalculate(project.positions, {
@@ -222,7 +210,7 @@ export default function ProjectView({ projectId, onBack, onRefresh }) {
           geraete_default: 0.50,
         },
         priceMap: activePriceMap,
-        useSirados: isSiradosLoaded(),
+        useSirados: false, // DEAKTIVIERT
         onProgress: (step, current, total) => {
           setAutoCalcProgress({ step, current, total });
         },

@@ -14,7 +14,8 @@
 
 import { calculateProject } from './calculator.js';
 import { checkProject } from './plausiChecker.js';
-import { findBestSiradosMatch, isSiradosLoaded } from './siradosSearch.js';
+// SIRADOS DEAKTIVIERT (CLAUDE.md v1.3, Zeile 71-82: "bis auf Widerruf durch den Master")
+// import { findBestSiradosMatch, isSiradosLoaded } from './siradosSearch.js';
 import { FIRMA_DEFAULTS, FARBEN } from './regelwerk.js';
 import { hasApiKey } from './angebotExtractor.js';
 import { classifyWithAI, analyzeLangtextWithAI, findPriceWithAI } from './aiAssistant.js';
@@ -33,7 +34,7 @@ export async function autoCalculate(positions, options = {}) {
   const {
     params = {},
     priceMap = {},       // oz → { hauptmaterial_preis, nu_preis, quelle }
-    useSirados = true,
+    useSirados = false,  // DEAKTIVIERT — Boss-Anweisung CLAUDE.md v1.3
     onProgress = null,   // callback(step, current, total)
   } = options;
 
@@ -43,7 +44,7 @@ export async function autoCalculate(positions, options = {}) {
   log('autoCalc', '═══ AUTO-KALKULATION GESTARTET ═══', {
     positionen: positions.length,
     angebotPreise: Object.keys(priceMap).length,
-    siradosGeladen: isSiradosLoaded(),
+    sirados: 'DEAKTIVIERT (CLAUDE.md v1.3)',
     apiKeyVorhanden: hasApiKey(),
   });
 
@@ -84,71 +85,15 @@ export async function autoCalculate(positions, options = {}) {
 
   if (onProgress) onProgress('calculate', positions.length, positions.length);
 
-  // ─── Phase 2: Sirados backup for unknown/missing prices ──────
-  if (useSirados && isSiradosLoaded()) {
-    let siradosHits = 0;
-    for (const pos of calcResult.positions) {
-      if (pos.modus === 'header') continue;
-
-      // Only use Sirados for positions without Angebot prices
-      const hasAngebotPrice = safePriceMap[pos.oz]?.hauptmaterial_preis > 0;
-      if (hasAngebotPrice) continue;
-
-      // Use Sirados as plausibility cross-check
-      const siradosMatch = findBestSiradosMatch(
-        pos.short_text,
-        pos.long_text,
-        pos.unit
-      );
-
-      if (siradosMatch && siradosMatch.verwendbar) {
-        log('autoCalc', `  Sirados ${pos.oz}: ${siradosMatch.preis_range} (${siradosMatch.confidence})`, { nr: siradosMatch.nr });
-        pos.sirados = {
-          nr: siradosMatch.nr,
-          text: siradosMatch.text,
-          range: siradosMatch.preis_range,
-          von: siradosMatch.von,
-          bis: siradosMatch.bis,
-          mittel: siradosMatch.mittel,
-          confidence: siradosMatch.confidence,
-        };
-
-        // If position has no price at all, USE Sirados as fallback (Waterfall step 3)
-        if (pos.X === 0 && !pos.materialDecomposition?.X_rein_arbeit && pos.modus === 'normal') {
-          if (siradosMatch.mittel > 0 && siradosMatch.confidence !== 'LOW') {
-            // Apply Sirados price as material cost
-            pos.X = Math.round(siradosMatch.mittel * 100) / 100;
-            pos.EP_material = Math.round(pos.X * (1 + mergedParams.zuschlag_material) * 100) / 100;
-            pos.EP = Math.round((pos.EP_lohn + pos.EP_material + pos.EP_geraet + pos.EP_nu) * 100) / 100;
-            pos.GP = Math.round(pos.EP * (pos.quantity || 0) * 100) / 100;
-            pos.farbe = '#FFF2CC'; // gelb — Sirados-Schätzung
-            pos.quellen.push(`Sirados ${siradosMatch.nr}: ${siradosMatch.preis_range}`);
-            pos.kommentare.push(`Sirados-Preis: ${siradosMatch.mittel} €/${pos.unit} (${siradosMatch.confidence})`);
-            siradosHits++;
-          } else {
-            pos.sirados_suggestion = true;
-            pos.kommentare.push(
-              `Sirados-Vorschlag (niedrige Konfidenz): ${siradosMatch.preis_range}`
-            );
-          }
-        }
-
-        // Cross-check: if our EP is way off from Sirados
-        if (pos.EP > 0 && siradosMatch.mittel > 0) {
-          const deviation = Math.abs(pos.EP - siradosMatch.mittel) / siradosMatch.mittel;
-          if (deviation > 0.5) {
-            pos.warnings.push(
-              `EP ${pos.EP.toFixed(2)} € weicht ${Math.round(deviation*100)}% von Sirados ab (${siradosMatch.preis_range})`
-            );
-          }
-        }
-
-        siradosHits++;
-      }
-    }
-    calcResult.siradosHits = siradosHits;
-    log('autoCalc', `Phase 2 — Sirados: ${siradosHits} Treffer`);
-  }
+  // ─── Phase 2: SIRADOS DEAKTIVIERT ───────────────────────────
+  // Preisquellen-Policy v1.1 (CLAUDE.md): Sirados ist bis auf Widerruf
+  // durch den Master NICHT zu verwenden. Waterfall:
+  //   1. Projekt-Angebote (grün)
+  //   2. Preisdatenbank preise.xlsx (gelb)
+  //   3. knowledge_base.json erfahrungspreise (gelb)
+  //   4. Internet-Recherche (rot) — nur Notnagel
+  log('autoCalc', 'Phase 2 — Sirados: DEAKTIVIERT (CLAUDE.md v1.3 Preisquellen-Policy)');
+  calcResult.siradosHits = 0;
 
   if (onProgress) onProgress('sirados', positions.length, positions.length);
 

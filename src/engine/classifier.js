@@ -82,10 +82,10 @@ const PATTERNS = [
     id: 'be_einrichten',
     category: 'baustelleneinrichtung', leistung: 'be_einrichten_galabau',
     triggers: {
-      any: ['baustelleneinrichtung', 'baustelle einrichten', 'be einrichten', 'baustelleneinr'],
+      regex_any: [/^baustelleneinrichtung/i, /\bbaustelle\s+einrichten\b/i, /\bbe\s+einrichten\b/i],
       none: ['räumen', 'raeumen', 'vorhalt', 'rückbau'],
     },
-    priority: 88, // higher than most — BE is very specific
+    priority: 92, // must win over everything — checks SHORT TEXT start
   },
   {
     id: 'be_raeumen',
@@ -263,9 +263,9 @@ const PATTERNS = [
       any: ['pflasterdecke', 'pflaster verlegen', 'betonpflaster', 'verbundpflaster',
             'betonsteinpflaster', 'kleinpflaster', 'pflasterbelag', 'pflasterbeläge',
             'pflasterfläche', 'ökobetonpflaster', 'ökopflaster'],
-      none: ['anpassen', 'rückbau', 'aufnehmen', 'schneiden', 'bord', 'rinne', 'zuschnitt'],
+      none: ['rückbau', 'aufnehmen', 'bord', 'rinne'],
     },
-    priority: 60,
+    priority: 67, // must beat pflaster_anpassen (65) and schneiden
   },
   {
     id: 'pflaster_anpassen',
@@ -367,8 +367,9 @@ const PATTERNS = [
     id: 'doppelstabmatte',
     category: 'schwere_bauteile', leistung: 'doppelstabmatte',
     triggers: {
-      any: ['doppelstabmatte', 'doppelstabgitterzaun', 'stabgitterzaun', 'stabgittermatte'],
-      none: ['vorhalt', 'pfosten', 'torpfosten'],
+      any: ['doppelstabmatte', 'doppelstabgitterzaun', 'stabgitterzaun', 'stabgittermatte',
+            'stabgitter'],
+      none: ['vorhalt', 'pfosten', 'torpfosten', 'schacht'],
     },
     priority: 60,
   },
@@ -621,6 +622,15 @@ const PATTERNS = [
       none: [],
     },
     priority: 58,
+  },
+  {
+    id: 'zaun_einpassen',
+    category: 'schwere_bauteile', leistung: 'doppelstabmatte',
+    triggers: {
+      any: ['zaun einpass', 'stabgitterzaun einpass', 'zaun anpass'],
+      none: [],
+    },
+    priority: 62,
   },
   {
     id: 'einfassung_spielplatz',
