@@ -22,7 +22,7 @@ import { preisProTonneToM2, findSchuettdichte } from './unitConverter.js';
  * @returns {Object} Complete calculation result
  */
 export function calculatePosition(position, allPositions = [], posIndex = 0, params = {}, priceOverrides) {
-  priceOverrides = priceOverrides || {};
+  if (!priceOverrides || typeof priceOverrides !== 'object') priceOverrides = {};
   const p = { ...FIRMA_DEFAULTS, ...params };
   const result = {
     // Input
@@ -392,7 +392,13 @@ export function calculateProject(positions, params = {}, priceMap = {}) {
       continue;
     }
 
-    const priceOverride = (priceMap && priceMap[pos.oz]) || {};
+    let priceOverride = {};
+    try {
+      const raw = priceMap ? priceMap[pos.oz] : null;
+      if (raw && typeof raw === 'object') {
+        priceOverride = raw;
+      }
+    } catch { /* ignore */ }
     const calcResult = calculatePosition(pos, positions, i, params, priceOverride);
 
     results.push({
