@@ -43,7 +43,9 @@ const MATERIAL_GROUPS = {
   spielgeraete: {
     label: 'Spielgeräte',
     keywords: ['spielgerät', 'klettergerät', 'schaukel', 'rutsche', 'wippe', 'seilbahn',
-               'kletterturm', 'karussell', 'spielkombination', 'balancier', 'robinie'],
+               'kletterturm', 'karussell', 'spielkombination', 'balancier', 'robinie',
+               'nesthockerschaukel', 'nestschaukel', 'hüpfpilz', 'federwippe',
+               'holztor', 'sicherheitsprüfung', 'erdanker', 'eibe'],
   },
   zaun: {
     label: 'Zaunbau',
@@ -139,7 +141,10 @@ export function matchAngeboteToLV(angebote, positions) {
 
     for (const item of allItems) {
       const score = calculateMatchScore(item, pos, posText, posGroup);
-      if (score > 0.3) {
+      // Require higher score AND matching material group for reliable matching
+      const groupMatch = item.material_group === posGroup && posGroup !== 'sonstiges';
+      const minScore = groupMatch ? 0.3 : 0.6; // strict for cross-group matches
+      if (score > minScore) {
         if (!matches.has(pos.oz)) matches.set(pos.oz, []);
         matches.get(pos.oz).push({
           item,
@@ -315,15 +320,22 @@ export function buildPriceMap(bestSuppliers, matches, positions, angebote = []) 
     const fracht = angebot.fracht;
     if (!fracht) continue;
 
-    // Calculate total material value for proportional distribution
+    // Calculate total ORDER value (sum of quantity × unit price) for proportional Fracht
+    // Note: we don't have LV quantities here, so use Angebot quantities if available
+    // Fallback: sum unit prices (rough estimate, better than nothing)
     let totalMaterialValue = 0;
     for (const item of (angebot.positionen || [])) {
-      totalMaterialValue += item.preis_effektiv || item.preis_basis || 0;
+      const itemPrice = item.preis_effektiv || item.preis_basis || 0;
+      // If Angebot has menge, use it; otherwise count item once
+      totalMaterialValue += itemPrice;
     }
+    // Cap fracht percentage at max 15% (realistic for construction materials)
+    const MAX_FRACHT_PCT = 0.15;
 
     if (fracht.pauschal_eur > 0 && totalMaterialValue > 0) {
+      const rawPct = fracht.pauschal_eur / totalMaterialValue;
       frachtPct[angebot.lieferant] = {
-        pct: fracht.pauschal_eur / totalMaterialValue,
+        pct: Math.min(rawPct, MAX_FRACHT_PCT), // cap at 15%
         pauschal: fracht.pauschal_eur,
         frei_ab: fracht.frei_ab_eur || null,
       };
@@ -372,9 +384,10 @@ export function buildPriceMap(bestSuppliers, matches, positions, angebote = []) 
     const converted = convertMatchPrice(supplierMatch, pos, frachtPct);
 
     // Determine if this is NU (M column) or Material (X column)
-    const isNU = selectedSupplier.items.some(si =>
-      si.pos_nr && si.bezeichnung.toLowerCase().match(/komplett|nu|montage|verlegen|einbau/)
-    );
+    // Use material group: asphalt_nu and fallschutz_nu are always NU
+    // Pflanzen, Bordsteine, Pflaster, Schotter etc. are always Material
+    const groupIsNU = (posGroup === 'asphalt_nu' || posGroup === 'fallschutz_nu');
+    const isNU = groupIsNU;
 
     if (isNU) {
       priceMap[pos.oz] = {
@@ -500,9 +513,11 @@ export function getSupplierSummary(comparison) {
 // ─── HELPERS ──────────────────────────────────────────────────────
 
 function normalizeUnit(unit) {
-  return (unit || '').toLowerCase()
+  let u = (unit || '').toLowerCase().trim()
     .replace(/²/g, '2').replace(/³/g, '3')
     .replace(/stk|stck|stück/g, 'st')
-    .replace(/lfdm|lfd\.?\s*m/g, 'lfm')
-    .trim();
+    .replace(/lfdm|lfd\.?\s*m|lfm/g, 'm')
+    .replace(/^€\//, '');
+  if (u === 'lm') u = 'm';
+  return u;
 }

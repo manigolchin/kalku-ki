@@ -248,11 +248,14 @@ export function getUnitConversion(angebotUnit, lvUnit, dimensions, materialText)
 
 function normalizeUnit(unit) {
   if (!unit) return '';
-  const u = unit.toLowerCase().trim()
+  let u = unit.toLowerCase().trim()
     .replace(/²/g, '2').replace(/³/g, '3')
     .replace(/stk/g, 'st').replace(/stck/g, 'st').replace(/stück/g, 'st')
-    .replace(/lfdm/g, 'lfm').replace(/lfd\.?\s*m/g, 'lfm')
-    .replace(/psch/g, 'psch').replace(/pau/g, 'psch');
+    .replace(/lfdm/g, 'm').replace(/lfd\.?\s*m/g, 'm').replace(/lfm/g, 'm')
+    .replace(/psch/g, 'psch').replace(/pau/g, 'psch')
+    .replace(/^€\//, ''); // strip €/ prefix
+  // "lm" = "m"
+  if (u === 'lm') u = 'm';
   return u;
 }
 
