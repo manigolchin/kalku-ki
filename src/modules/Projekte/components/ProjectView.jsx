@@ -172,16 +172,17 @@ export default function ProjectView({ projectId, onBack, onRefresh }) {
     }
 
     // Auto-build priceMap from stored Angebote if not provided
-    let activePriceMap = overridePriceMap || priceMapRef.current;
+    let activePriceMap = overridePriceMap || priceMapRef.current || {};
 
     const angebote = getAngebote(projectId);
+    const priceCount = Object.keys(activePriceMap).length;
     log('projectView', `Auto-Kalkulieren gestartet`, {
       positionen: project.positions.length,
       angebote: angebote.length,
-      existingPriceMap: Object.keys(activePriceMap).length,
+      existingPriceMap: priceCount,
     });
 
-    if (Object.keys(activePriceMap).length === 0 && angebote.length > 0) {
+    if (priceCount === 0 && angebote.length > 0) {
       log('projectView', `PriceMap leer → baue aus ${angebote.length} Angeboten`);
       const { matches, supplierGroups } = matchAngeboteToLV(angebote, project.positions);
       const { bestSuppliers } = selectBestSuppliers(supplierGroups);
@@ -495,10 +496,10 @@ export default function ProjectView({ projectId, onBack, onRefresh }) {
               onPriceMapReady={(map) => {
                 setPriceMap(map);
                 priceMapRef.current = map;
-                toast.success(
-                  `${Object.keys(map).length} Angebot-Preise geladen. Jetzt "Auto-Kalkulieren" klicken!`,
-                  { duration: 5000 }
-                );
+                setActiveTab('positionen');
+                log('projectView', `Preise übernommen: ${Object.keys(map).length} → starte Auto-Kalkulieren`);
+                // Directly trigger calculation with the priceMap
+                setTimeout(() => handleAutoCalc(map), 200);
               }}
             />
           )}
