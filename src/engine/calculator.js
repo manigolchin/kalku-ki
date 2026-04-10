@@ -21,7 +21,8 @@ import { preisProTonneToM2, findSchuettdichte } from './unitConverter.js';
  * @param {Object} priceOverrides - { hauptmaterial_preis, nu_preis } from Angebote
  * @returns {Object} Complete calculation result
  */
-export function calculatePosition(position, allPositions = [], posIndex = 0, params = {}, priceOverrides = {}) {
+export function calculatePosition(position, allPositions = [], posIndex = 0, params = {}, priceOverrides) {
+  priceOverrides = priceOverrides || {};
   const p = { ...FIRMA_DEFAULTS, ...params };
   const result = {
     // Input
@@ -340,6 +341,7 @@ function calculateVorhalten(position, classification, result) {
 
 // ─── NU CALCULATION ───────────────────────────────────────────────
 function calculateNU(position, result, params, priceOverrides) {
+  priceOverrides = priceOverrides || {};
   result.modus = 'nu';
   result.X = 0;
   result.Y = 0;
@@ -390,7 +392,7 @@ export function calculateProject(positions, params = {}, priceMap = {}) {
       continue;
     }
 
-    const priceOverride = priceMap[pos.oz] || {};
+    const priceOverride = (priceMap && priceMap[pos.oz]) || {};
     const calcResult = calculatePosition(pos, positions, i, params, priceOverride);
 
     results.push({
@@ -442,6 +444,7 @@ export function calculateProject(positions, params = {}, priceMap = {}) {
 
 // ─── ZULAGE CALCULATION ──────────────────────────────────────────
 function calculateZulage(position, classification, result, params, priceOverrides, allPositions) {
+  priceOverrides = priceOverrides || {};
   result.modus = 'zulage';
   result.Y = 0; // Zulage usually has no extra time (pure material swap)
   result.Z = 0;
