@@ -159,6 +159,141 @@ export default function EinstellungenModule() {
           </div>
         </SectionCard>
 
+        <SectionCard title="Leitfaden-Grundwerte (Kalkulations_Leitfaden &sect;0)">
+          <SliderInput
+            label="Stundensatz (Verrechnungslohn)"
+            value={settings.stundensatz || 72.51}
+            min={40} max={120} step={0.01} unit="&euro;/h"
+            onChange={(v) => updateSettings({ stundensatz: v })}
+          />
+          <SliderInput
+            label="Zuschlag Material"
+            value={settings.zuschlag_material || 20}
+            min={0} max={50} step={1} unit="%"
+            onChange={(v) => updateSettings({ zuschlag_material: v })}
+          />
+          <SliderInput
+            label="Zuschlag NU"
+            value={settings.zuschlag_nu || 20}
+            min={0} max={50} step={1} unit="%"
+            onChange={(v) => updateSettings({ zuschlag_nu: v })}
+          />
+          <SliderInput
+            label="Ger&auml;te-Default"
+            value={settings.geraete_default || 0.50}
+            min={0} max={5} step={0.10} unit="&euro;/h"
+            onChange={(v) => updateSettings({ geraete_default: v })}
+          />
+        </SectionCard>
+
+        <SectionCard title="&sect;1 Baustelleneinrichtung">
+          <SliderInput
+            label="BE einrichten (Y)"
+            value={settings.be_einrichten_Y || 1800}
+            min={300} max={3600} step={60} unit="min"
+            onChange={(v) => updateSettings({ be_einrichten_Y: v })}
+          />
+          <SliderInput
+            label="BE einrichten (Z)"
+            value={settings.be_einrichten_Z || 50}
+            min={5} max={100} step={5} unit="&euro;/h"
+            onChange={(v) => updateSettings({ be_einrichten_Z: v })}
+          />
+          <SliderInput
+            label="BE r&auml;umen (Y)"
+            value={settings.be_raeumen_Y || 600}
+            min={60} max={1800} step={60} unit="min"
+            onChange={(v) => updateSettings({ be_raeumen_Y: v })}
+          />
+          <SliderInput
+            label="BE vorhalten (Y pro Tag)"
+            value={settings.be_vorhalten_Y_tag || 10}
+            min={0} max={60} step={5} unit="min"
+            onChange={(v) => updateSettings({ be_vorhalten_Y_tag: v })}
+          />
+        </SectionCard>
+
+        <SectionCard title="&sect;2-3 Erdarbeiten &amp; Sch&uuml;ttg&uuml;ter">
+          <SliderInput
+            label="Aushub Gro&szlig;maschine (Y)"
+            value={settings.aushub_gross_Y || 2}
+            min={1} max={10} step={0.5} unit="min/m&sup3;"
+            onChange={(v) => updateSettings({ aushub_gross_Y: v })}
+          />
+          <SliderInput
+            label="Aushub Handarbeit (Y min)"
+            value={settings.aushub_hand_Y_min || 240}
+            min={60} max={600} step={30} unit="min/m&sup3;"
+            onChange={(v) => updateSettings({ aushub_hand_Y_min: v })}
+          />
+          <SliderInput
+            label="Sch&uuml;ttgut gro&szlig;fl. (Y)"
+            value={settings.schuett_gross_Y || 3}
+            min={1} max={15} step={0.5} unit="min/m&sup3;"
+            onChange={(v) => updateSettings({ schuett_gross_Y: v })}
+          />
+          <SliderInput
+            label="Kleinmenge Schwelle"
+            value={settings.schuett_klein_schwelle || 200}
+            min={50} max={500} step={25} unit="m&sup2;"
+            onChange={(v) => updateSettings({ schuett_klein_schwelle: v })}
+          />
+        </SectionCard>
+
+        <SectionCard title="&sect;4-5 Pflaster/Bord/Beton/Abbruch">
+          <SliderInput
+            label="Pflaster verlegen (Y)"
+            value={settings.pflaster_Y || 25}
+            min={15} max={60} step={1} unit="min/m&sup2;"
+            onChange={(v) => updateSettings({ pflaster_Y: v })}
+          />
+          <SliderInput
+            label="Bordstein setzen (Y)"
+            value={settings.bordstein_Y || 15}
+            min={8} max={30} step={1} unit="min/lfm"
+            onChange={(v) => updateSettings({ bordstein_Y: v })}
+          />
+          <SliderInput
+            label="Beton Kleinmenge"
+            value={settings.beton_klein_preis || 200}
+            min={100} max={400} step={10} unit="&euro;/m&sup3;"
+            onChange={(v) => updateSettings({ beton_klein_preis: v })}
+          />
+          <SliderInput
+            label="Abbruch Asphalt (Y)"
+            value={settings.abbruch_asphalt_Y || 15}
+            min={5} max={30} step={1} unit="min/m&sup3;"
+            onChange={(v) => updateSettings({ abbruch_asphalt_Y: v })}
+          />
+        </SectionCard>
+
+        <SectionCard title="&sect;6 Pflanzen/B&auml;ume">
+          <SliderInput
+            label="Hochstamm pflanzen (Y)"
+            value={settings.baum_pflanzen_Y || 120}
+            min={60} max={300} step={10} unit="min/St"
+            onChange={(v) => updateSettings({ baum_pflanzen_Y: v })}
+          />
+          <SliderInput
+            label="Hecke setzen (Y)"
+            value={settings.hecke_Y || 4}
+            min={2} max={15} step={1} unit="min/St"
+            onChange={(v) => updateSettings({ hecke_Y: v })}
+          />
+          <SliderInput
+            label="Spielger&auml;t (Z)"
+            value={settings.spielgeraet_Z || 5}
+            min={0} max={25} step={1} unit="&euro;/h"
+            onChange={(v) => updateSettings({ spielgeraet_Z: v })}
+          />
+          <SliderInput
+            label="Schneiden Pflaster (Y)"
+            value={settings.schneiden_pflaster_Y_m2 || 187}
+            min={100} max={400} step={5} unit="min/m&sup2;"
+            onChange={(v) => updateSettings({ schneiden_pflaster_Y_m2: v })}
+          />
+        </SectionCard>
+
         <SectionCard title="API">
           <div className="space-y-2">
             <label className="text-sm text-slate-600 font-medium">API Key</label>

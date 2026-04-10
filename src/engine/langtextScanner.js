@@ -206,6 +206,40 @@ const MODIFIERS = [
     faktor: 3.0,
     beschreibung: 'Handarbeit → Y verdreifachen (kein Maschineneinsatz)',
   },
+
+  // ═══ INKL. GENERIC (§0.8: "jede inkludierte Nebenleistung preislich abdecken") ═══
+  {
+    id: 'inkl_generic',
+    pattern: /inkl\.?\s+([^,.;]{3,40})/i,
+    excludeIf: 'inkl_fundament_und_rueckenstuetze', // don't fire if specific inkl already matched
+    action: 'flag_inkl',
+    beschreibung: 'inkl. Nebenleistung erkannt — muss preislich abgedeckt werden',
+  },
+
+  // ═══ BEWÄSSERUNG / ARBEITSGÄNGE (Pflege-Modifier) ═══
+  {
+    id: 'arbeitsgaenge',
+    pattern: /(\d+)\s*(?:arbeitsg[äa]ng|ag\b|durchg[äa]ng)/i,
+    action: 'extract_dimension',
+    dimension: 'arbeitsgaenge',
+    beschreibung: 'Anzahl Arbeitsgänge extrahiert (für Pflege-Positionen)',
+  },
+
+  // ═══ ZWEISEITIG (Bordstein beidseitig Beton) ═══
+  {
+    id: 'zweiseitig',
+    pattern: /zweiseitig|beidseitig/i,
+    action: 'flag_zweiseitig',
+    beschreibung: 'Beidseitig → doppelter Betonverbrauch bei Bordsteinen',
+  },
+
+  // ═══ GROSSE MENGE / LIEFERUNG FREI BAUSTELLE ═══
+  {
+    id: 'frei_baustelle',
+    pattern: /frei\s+(?:bau|einsatz)stelle/i,
+    action: 'flag_frei_bs',
+    beschreibung: 'Frei Baustelle — Lieferkosten im Preis enthalten',
+  },
 ];
 
 

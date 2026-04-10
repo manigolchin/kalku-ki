@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useRef } from 'react';
-import { ArrowLeft, Table2, BarChart3, Settings, Upload, Loader2, Zap, CheckCircle2, AlertTriangle, XCircle, FileText } from 'lucide-react';
+import { ArrowLeft, Table2, BarChart3, Settings, Upload, Loader2, Zap, CheckCircle2, AlertTriangle, XCircle, FileText, Download } from 'lucide-react';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import { getProject, setProjectPositions, updateProjectMeta } from '../../../utils/projectStore';
@@ -11,6 +11,7 @@ import { autoCalculate } from '../../../engine/autoCalc';
 import { getAngebote } from '../../../engine/angebotExtractor';
 import { matchAngeboteToLV, selectBestSuppliers, buildPriceMap } from '../../../engine/supplierMatcher';
 import { log, logError } from '../../../engine/logger';
+import { exportLV3 } from '../../../utils/excelExport';
 import ProjectHeader from './ProjectHeader';
 import PositionTable from './PositionTable';
 import CostBreakdown from './CostBreakdown';
@@ -320,12 +321,33 @@ export default function ProjectView({ projectId, onBack, onRefresh }) {
               )}
             </button>
 
+            {autoCalcResult && (
+              <button
+                onClick={() => {
+                  try {
+                    const filename = exportLV3(
+                      autoCalcResult.positions,
+                      project.name || 'Projekt',
+                      autoCalcResult.summary,
+                      autoCalcResult.plausi
+                    );
+                    toast.success(`LV3 exportiert: ${filename}`);
+                  } catch (err) {
+                    toast.error(`Export-Fehler: ${err.message}`);
+                  }
+                }}
+                className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 shadow-sm transition-all duration-200"
+              >
+                <Download className="h-4 w-4" />
+                LV3 Export
+              </button>
+            )}
+
             {autoCalcProgress && (
               <span className="text-sm text-gray-500">
-                {autoCalcProgress.step === 'sirados_load' && 'Lade Sirados-Daten...'}
                 {autoCalcProgress.step === 'classify' && 'Klassifiziere Positionen...'}
                 {autoCalcProgress.step === 'calculate' && 'Berechne...'}
-                {autoCalcProgress.step === 'sirados' && 'Sirados-Abgleich...'}
+                {autoCalcProgress.step === 'sirados' && 'Preisquellen-Check...'}
                 {autoCalcProgress.step === 'ai_analyse' && 'KI analysiert unbekannte Positionen...'}
                 {autoCalcProgress.step === 'ai_done' && 'KI-Analyse abgeschlossen'}
                 {autoCalcProgress.step === 'plausi' && 'Plausibilitätsprüfung...'}
@@ -358,7 +380,7 @@ export default function ProjectView({ projectId, onBack, onRefresh }) {
                   </span>
                   <span className="inline-flex items-center gap-1">
                     <span className="h-2 w-2 rounded-full bg-yellow-400" />
-                    Sirados: {autoCalcResult.stats.withSirados}
+                    KB/PDB: {autoCalcResult.stats.withSirados || 0}
                   </span>
                   {autoCalcResult.stats.withAI > 0 && (
                     <span className="inline-flex items-center gap-1">
