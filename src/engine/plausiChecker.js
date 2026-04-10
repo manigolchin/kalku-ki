@@ -7,12 +7,12 @@
 
 import { GALABAU, FIRMA_DEFAULTS } from './regelwerk.js';
 
-// ─── PLAUSIBILITY CORRIDORS ───────────────────────────────────────
+// ─── PLAUSIBILITY CORRIDORS (Leitfaden §8.2) ─────────────────────
 const CORRIDORS = {
-  lohn:     { min: 25, max: 55 }, // % of GP
-  material: { min: 15, max: 45 },
-  nu:       { min: 0,  max: 30 },
-  geraet:   { min: 0,  max: 25 },
+  lohn:     { min: 35, max: 50 }, // % of GP — Leitfaden §8.2
+  material: { min: 20, max: 40 }, // Stoffe
+  nu:       { min: 5,  max: 25 }, // Nachunternehmer
+  geraet:   { min: 5,  max: 20 }, // Geräte
 };
 
 // ─── SINGLE POSITION CHECKS ──────────────────────────────────────
@@ -186,6 +186,34 @@ export function checkPosition(calcResult) {
       warns.push({
         rule: 'gp_sehr_hoch',
         message: `GP = ${gp.toLocaleString('de-DE')} € — Top-Position, sorgfältig prüfen`,
+      });
+    }
+  }
+
+  // ─── Rule: Pflege-Positionen brauchen m²/AG-spezifische Raten ──
+  if (classId.includes('waessern') || classId.includes('maehen') ||
+      classId.includes('duengen') || classId.includes('fertigstellungspflege')) {
+    if (calcResult.Y === 15 && calcResult.Z === 5) {
+      fails.push({
+        rule: 'pflege_default_verboten',
+        message: `Pflege-Position: Y=15/Z=5 ist der RIESEN-Default — Pflege braucht m²/AG-spezifische Raten (CLAUDE.md Phase 2 Punkt 13)`,
+      });
+    }
+    if (calcResult.Y === 0) {
+      warns.push({
+        rule: 'pflege_Y_null',
+        message: `Pflege-Position: Y=0 ist unwahrscheinlich — Pflegearbeiten brauchen Arbeitszeit`,
+      });
+    }
+  }
+
+  // ─── Rule: Default Y=15 Z=5 is a red flag (CLAUDE.md Phase 2 Punkt 12) ──
+  if (calcResult.Y === 15 && calcResult.Z === 5 && calcResult.modus === 'normal') {
+    // Only warn if this is not a legitimate combination (e.g. Bordstein setzen = Y=15 Z=5)
+    if (!classId.includes('bordstein') && !classId.includes('tiefbord')) {
+      warns.push({
+        rule: 'default_Y15_Z5_warnsignal',
+        message: `Y=15 Z=5 könnte Default sein — CLAUDE.md: "mehrere Positionen mit diesem Default = Fehler"`,
       });
     }
   }
@@ -401,6 +429,124 @@ export function checkProject(calcResults, summary) {
         message: `${bauteileOrder[i]} (Y=${higher.Y}) sollte mehr Arbeitszeit haben als ${bauteileOrder[i+1]} (Y=${lower.Y})`,
       });
     }
+  }
+
+  // ─── Konsistenz-Kette: Rohre DN (größerer DN >= kleinerer DN EP) ──
+  const rohreByDN = [];
+  for (const result of calcResults) {
+    if (result.dimensions?.dn > 0 && result.EP > 0 &&
+        (result.classification?.leistung?.includes('rohr') || result.short_text?.toLowerCase().includes('rohr'))) {
+      rohreByDN.push({ dn: result.dimensions.dn, EP: result.EP, oz: result.oz });
+    }
+  }
+  rohreByDN.sort((a, b) => a.dn - b.dn);
+  for (let i = 1; i < rohreByDN.length; i++) {
+    if (rohreByDN[i].EP < rohreByDN[i-1].EP) {
+      projectChecks.push({
+        rule: 'konsistenz_rohre_dn',
+        severity: 'FAIL',
+        message: `Rohre DN${rohreByDN[i].dn} (${rohreByDN[i].EP}€, Pos ${rohreByDN[i].oz}) günstiger als DN${rohreByDN[i-1].dn} (${rohreByDN[i-1].EP}€, Pos ${rohreByDN[i-1].oz}) — prüfen`,
+      });
+      totalFails++;
+    }
+  }
+
+  // ─── Konsistenz-Kette: Bäume Stammumfang (größerer StU >= kleinerer StU EP) ──
+  const baeumeByStU = [];
+  for (const result of calcResults) {
+    if (result.dimensions?.stammumfang_von > 0 && result.EP > 0 &&
+        (result.classification?.leistung?.includes('baum') || result.short_text?.toLowerCase().includes('baum'))) {
+      baeumeByStU.push({ stu: result.dimensions.stammumfang_von, EP: result.EP, oz: result.oz });
+    }
+  }
+  baeumeByStU.sort((a, b) => a.stu - b.stu);
+  for (let i = 1; i < baeumeByStU.length; i++) {
+    if (baeumeByStU[i].EP < baeumeByStU[i-1].EP) {
+      projectChecks.push({
+        rule: 'konsistenz_baeume_stu',
+        severity: 'FAIL',
+        message: `Baum StU ${baeumeByStU[i].stu} (${baeumeByStU[i].EP}€, Pos ${baeumeByStU[i].oz}) günstiger als StU ${baeumeByStU[i-1].stu} (${baeumeByStU[i-1].EP}€, Pos ${baeumeByStU[i-1].oz}) — prüfen`,
+      });
+      totalFails++;
+    }
+  }
+
+  // ─── Konsistenz-Kette: Bord-Typ (Rundbord > Hochbord > Tiefbord EP) ──
+  const bordByTyp = {};
+  for (const result of calcResults) {
+    if (result.EP > 0 && result.dimensions?.bordstein_typ) {
+      const typ = result.dimensions.bordstein_typ.substring(0, 2).toUpperCase();
+      if (!bordByTyp[typ] || result.EP > bordByTyp[typ].EP) {
+        bordByTyp[typ] = { EP: result.EP, oz: result.oz, typ: result.dimensions.bordstein_typ };
+      }
+    }
+  }
+  // Tiefbord (EF/TB low h) < Hochbord (TB/HB high h) < Rundbord (RB)
+  const bordOrder = ['EF', 'TB', 'HB', 'RB'];
+  for (let i = 0; i < bordOrder.length - 1; i++) {
+    const lower = bordByTyp[bordOrder[i]];
+    const higher = bordByTyp[bordOrder[i + 1]];
+    if (lower && higher && higher.EP < lower.EP) {
+      projectChecks.push({
+        rule: 'konsistenz_bord_typ',
+        severity: 'FAIL',
+        message: `Bord ${higher.typ} (${higher.EP}€, Pos ${higher.oz}) günstiger als ${lower.typ} (${lower.EP}€, Pos ${lower.oz}) — prüfen`,
+      });
+      totalFails++;
+    }
+  }
+
+  // ─── Konsistenz-Kette: Schüttgüter Festigkeit (höhere Festigkeit teurer) ──
+  const schuettByFest = [];
+  for (const result of calcResults) {
+    if (result.EP > 0 && result.dimensions?.beton_c > 0) {
+      schuettByFest.push({ fest: result.dimensions.beton_c, EP: result.EP, oz: result.oz });
+    }
+  }
+  schuettByFest.sort((a, b) => a.fest - b.fest);
+  for (let i = 1; i < schuettByFest.length; i++) {
+    if (schuettByFest[i].EP < schuettByFest[i-1].EP) {
+      projectChecks.push({
+        rule: 'konsistenz_schuettgut_festigkeit',
+        severity: 'FAIL',
+        message: `Beton C${schuettByFest[i].fest} (${schuettByFest[i].EP}€, Pos ${schuettByFest[i].oz}) günstiger als C${schuettByFest[i-1].fest} (${schuettByFest[i-1].EP}€, Pos ${schuettByFest[i-1].oz}) — prüfen`,
+      });
+      totalFails++;
+    }
+  }
+
+  // ─── Coverage-Gate: Positionen ohne Regel-Match = FAIL ────────
+  const uncoveredPositions = [];
+  for (const result of calcResults) {
+    if (result.modus === 'header') continue;
+    if (result.modus === 'unknown' && !result.classification?.category) {
+      uncoveredPositions.push(result.oz);
+    }
+  }
+  if (uncoveredPositions.length > 0) {
+    const ratio = uncoveredPositions.length / summary.totalPositions;
+    projectChecks.push({
+      rule: 'coverage_gate',
+      severity: ratio > 0.1 ? 'FAIL' : 'WARN',
+      message: `${uncoveredPositions.length} Positionen ohne Regel-Match (Coverage-Gap): ${uncoveredPositions.slice(0, 10).join(', ')}${uncoveredPositions.length > 10 ? ` ... (+${uncoveredPositions.length - 10} weitere)` : ''}`,
+    });
+    if (ratio > 0.1) totalFails++;
+  }
+
+  // ─── Default Y=15 Z=5 Häufung = Fehler (CLAUDE.md Phase 2 Punkt 12) ──
+  let defaultCount = 0;
+  for (const result of calcResults) {
+    if (result.modus === 'normal' && result.Y === 15 && result.Z === 5) {
+      defaultCount++;
+    }
+  }
+  if (defaultCount >= 3) {
+    projectChecks.push({
+      rule: 'default_haeufung',
+      severity: 'FAIL',
+      message: `${defaultCount} Positionen haben Y=15/Z=5 — das ist der gefürchtete Default-Fehler (CLAUDE.md: "RIESEN-Warnsignal")`,
+    });
+    totalFails++;
   }
 
   return {
