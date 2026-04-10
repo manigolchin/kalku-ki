@@ -83,9 +83,9 @@ const PATTERNS = [
     category: 'baustelleneinrichtung', leistung: 'be_einrichten_galabau',
     triggers: {
       any: ['baustelleneinrichtung', 'baustelle einrichten', 'be einrichten', 'baustelleneinr'],
-      none: ['räumen', 'raeumen', 'vorhalt'],
+      none: ['räumen', 'raeumen', 'vorhalt', 'rückbau'],
     },
-    priority: 80,
+    priority: 88, // higher than most — BE is very specific
   },
   {
     id: 'be_raeumen',
@@ -261,8 +261,9 @@ const PATTERNS = [
     category: 'pflaster_bord', leistung: 'pflaster_standard',
     triggers: {
       any: ['pflasterdecke', 'pflaster verlegen', 'betonpflaster', 'verbundpflaster',
-            'betonsteinpflaster', 'kleinpflaster', 'pflasterbelag', 'pflasterfläche'],
-      none: ['anpassen', 'rückbau', 'aufnehmen', 'schneiden', 'bord', 'rinne'],
+            'betonsteinpflaster', 'kleinpflaster', 'pflasterbelag', 'pflasterbeläge',
+            'pflasterfläche', 'ökobetonpflaster', 'ökopflaster'],
+      none: ['anpassen', 'rückbau', 'aufnehmen', 'schneiden', 'bord', 'rinne', 'zuschnitt'],
     },
     priority: 60,
   },
@@ -270,11 +271,11 @@ const PATTERNS = [
     id: 'pflaster_anpassen',
     category: 'pflaster_bord', leistung: 'schneiden_pflaster_beton',
     triggers: {
-      any: ['anpassen'],
-      regex_any: [/pflaster|belag|platte/],
+      any: ['anpassen', 'zuschnitt', 'zuschnittarbeit'],
+      regex_any: [/pflaster|belag|platte|fallschutz/],
       none: ['bord rückbau'],
     },
-    priority: 65, // higher than regular pflaster
+    priority: 65,
   },
   {
     id: 'bordstein_setzen',
@@ -351,8 +352,10 @@ const PATTERNS = [
     category: 'schwere_bauteile', leistung: 'schacht_setzen',
     triggers: {
       any: ['schacht', 'kontrollschacht', 'revisionsschacht', 'sickerschacht'],
-      regex_any: [/setzen|einbau|versetzen/],
-      none: ['vorhalt', 'abdeckung nur'],
+      none: ['vorhalt', 'abdeckung nur', 'oberboden', 'substrat', 'tragschicht', 'geotextil',
+             'wurzel', 'graben', 'boden', 'kraut', 'vegetation', 'pflaster', 'bord',
+             'mauer', 'zaun', 'rohr', 'kabel', 'beleuchtung', 'mast', 'fundament',
+             'mulde', 'fläche', 'lockern', 'planieren', 'abtragen', 'entsorgen'],
     },
     priority: 60,
   },
@@ -360,8 +363,8 @@ const PATTERNS = [
     id: 'doppelstabmatte',
     category: 'schwere_bauteile', leistung: 'doppelstabmatte',
     triggers: {
-      any: ['doppelstabmatte', 'doppelstabgitterzaun', 'stabgitterzaun'],
-      none: ['vorhalt', 'pfosten'],
+      any: ['doppelstabmatte', 'doppelstabgitterzaun', 'stabgitterzaun', 'stabgittermatte'],
+      none: ['vorhalt', 'pfosten', 'torpfosten'],
     },
     priority: 60,
   },
@@ -490,6 +493,140 @@ const PATTERNS = [
       none: [],
     },
     priority: 50,
+  },
+
+  // ═══ ADDITIONAL COMMON POSITIONS ═══
+  {
+    id: 'geotextil_verlegen',
+    category: 'schuettgueter', leistung: 'einbau_kleinmenge',
+    triggers: {
+      any: ['geotextil', 'vliesstoff', 'trennvlies', 'filtervlies'],
+      none: [],
+    },
+    priority: 50,
+  },
+  {
+    id: 'boden_entsorgen',
+    category: 'erdarbeiten', leistung: 'transport_innerhalb',
+    triggers: {
+      any: ['entsorgen', 'entsorgung', 'abfahren', 'abfuhr'],
+      regex_any: [/boden|bauschutt|aushub|erdmass|oberboden/],
+      none: ['asphalt', 'beton', 'stahl'],
+    },
+    priority: 48,
+  },
+  {
+    id: 'substrat_liefern_einbauen',
+    category: 'schuettgueter', leistung: 'einbau_kleinmenge',
+    triggers: {
+      any: ['substrat', 'baumsubstrat', 'staudensubstrat', 'pflanzsubstrat'],
+      regex_any: [/liefern|einbau/],
+      none: [],
+    },
+    priority: 52,
+  },
+  {
+    id: 'stufe_herstellen',
+    category: 'beton_abbruch', leistung: 'betonieren_inkl_schalung',
+    triggers: {
+      any: ['stufenanlag', 'treppenstufe', 'blockstufe', 'stufe herstell'],
+      none: [],
+    },
+    priority: 50,
+  },
+  {
+    id: 'mauer_herstellen',
+    category: 'beton_abbruch', leistung: 'betonieren_inkl_schalung',
+    triggers: {
+      any: ['trockenmauer', 'natursteinmauer', 'mauerscheibe', 'sandsteinmauer'],
+      regex_any: [/herstell|erricht|setzen|bau/],
+      none: ['abbruch', 'abtrag', 'rückbau'],
+    },
+    priority: 55,
+  },
+  {
+    id: 'kabel_verlegen',
+    category: 'erdarbeiten', leistung: 'aushub_minibagger',
+    triggers: {
+      any: ['leitungsgraben', 'kabelgraben', 'kabel verlegen', 'kabeltrasse', 'rohrtrasse'],
+      none: [],
+    },
+    priority: 48,
+  },
+  {
+    id: 'boden_lockern',
+    category: 'erdarbeiten', leistung: 'planieren',
+    triggers: {
+      any: ['lockern', 'auflockern', 'bodenlockern'],
+      regex_any: [/fläche|vegetation|beet/],
+      none: [],
+    },
+    priority: 45,
+  },
+  {
+    id: 'facharbeiter_stundenlohn',
+    category: null, leistung: null, modus: 'unknown',
+    triggers: {
+      any: ['facharbeiter', 'bauhelfer', 'stundenlohn', 'tagelohn'],
+      none: [],
+    },
+    priority: 80, // high to prevent misclassification
+  },
+  {
+    id: 'asphalt_abtragen',
+    category: 'beton_abbruch', leistung: 'abbruch_asphalt',
+    triggers: {
+      any: ['asphaltbelag abtragen', 'asphalt abtragen', 'asphaltfläche abtragen'],
+      none: ['schneid', 'trenn', 'herstell'],
+    },
+    priority: 63,
+  },
+  {
+    id: 'asphalt_schneiden_lfdm',
+    category: 'pflaster_bord', leistung: 'schneiden_asphalt',
+    triggers: {
+      any: ['asphaltbelag schneiden', 'asphalt schneiden'],
+      none: ['aufnehmen', 'abtragen', 'herstell'],
+    },
+    priority: 64,
+  },
+  {
+    id: 'sickermulde',
+    category: 'erdarbeiten', leistung: 'aushub_grossmaschine',
+    triggers: {
+      any: ['sickermulde', 'mulde anlegen', 'versickerungsmulde'],
+      none: [],
+    },
+    priority: 50,
+  },
+  {
+    id: 'wurzelstock',
+    category: 'erdarbeiten', leistung: 'aushub_grossmaschine',
+    triggers: {
+      any: ['wurzelstock', 'wurzelstöck', 'baumstumpf', 'stubben'],
+      none: [],
+    },
+    priority: 52,
+  },
+  {
+    id: 'schachtabdeckung_anpassen',
+    category: 'schwere_bauteile', leistung: 'schacht_setzen',
+    triggers: {
+      any: ['schachtabdeckung', 'schachtdeckel'],
+      regex_any: [/anpassen|höhe|setzen/],
+      none: [],
+    },
+    priority: 58,
+  },
+  {
+    id: 'fallschutzbelag_einbau',
+    category: null, leistung: null, modus: 'nu',
+    triggers: {
+      any: ['fallschutzbelag einbau', 'fallschutzplatten', 'fallschutz einbau',
+            'fallschutzbelag herstell', 'epdm einbau'],
+      none: [],
+    },
+    priority: 100,
   },
 ];
 

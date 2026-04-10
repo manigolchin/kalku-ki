@@ -97,7 +97,7 @@ export function enrichPosition(pos, params) {
   }
 
   // If position has auto-calc results (EP, GP from engine), use those directly
-  if (pos.EP > 0 || pos.modus === 'vorhalten' || pos.modus === 'nu' || pos.modus === 'zulage') {
+  if (pos.modus && pos.modus !== 'header') {
     return {
       ...pos,
       ep: pos.EP || 0,
