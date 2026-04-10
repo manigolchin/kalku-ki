@@ -47,8 +47,11 @@ export async function autoCalculate(positions, options = {}) {
     apiKeyVorhanden: hasApiKey(),
   });
 
-  // Log priceMap details
-  for (const [oz, pm] of Object.entries(priceMap)) {
+  // Clean null entries from priceMap + log details
+  const safePriceMap = {};
+  for (const [oz, pm] of Object.entries(priceMap || {})) {
+    if (!pm || typeof pm !== 'object') continue;
+    safePriceMap[oz] = pm;
     if (pm.hauptmaterial_preis > 0 || pm.nu_preis > 0) {
       log('autoCalc', `  PriceMap ${oz}: X=${pm.hauptmaterial_preis || 0}, M=${pm.nu_preis || 0}`, { quelle: pm.quelle });
     }
@@ -57,7 +60,7 @@ export async function autoCalculate(positions, options = {}) {
   // ─── Phase 1: Calculate all positions ────────────────────────
   if (onProgress) onProgress('classify', 0, positions.length);
 
-  const calcResult = calculateProject(positions, mergedParams, priceMap);
+  const calcResult = calculateProject(positions, mergedParams, safePriceMap);
 
   log('autoCalc', 'Phase 1 — Kalkulation abgeschlossen', {
     classified: calcResult.summary.classified,
@@ -88,7 +91,7 @@ export async function autoCalculate(positions, options = {}) {
       if (pos.modus === 'header') continue;
 
       // Only use Sirados for positions without Angebot prices
-      const hasAngebotPrice = priceMap[pos.oz]?.hauptmaterial_preis > 0;
+      const hasAngebotPrice = safePriceMap[pos.oz]?.hauptmaterial_preis > 0;
       if (hasAngebotPrice) continue;
 
       // Use Sirados as plausibility cross-check
@@ -164,7 +167,7 @@ export async function autoCalculate(positions, options = {}) {
     const unpricedPositions = calcResult.positions.filter(p =>
       p.modus === 'normal' && p.X === 0 &&
       !p.materialDecomposition?.X_rein_arbeit && !p.is_header &&
-      !priceMap[p.oz]?.hauptmaterial_preis
+      !safePriceMap[p.oz]?.hauptmaterial_preis
     );
     const complexLangtextPositions = calcResult.positions.filter(p =>
       p.modus !== 'header' && p.modus !== 'unknown' &&
@@ -327,7 +330,7 @@ export async function autoCalculate(positions, options = {}) {
       ? Math.round(calcResult.summary.classified / calcResult.summary.totalPositions * 100)
       : 0,
 
-    withAngebot: Object.keys(priceMap).length,
+    withAngebot: Object.keys(safePriceMap).length,
     withSirados: calcResult.siradosHits || 0,
     withAI: aiStats.classified + aiStats.priced,
     aiClassified: aiStats.classified,
