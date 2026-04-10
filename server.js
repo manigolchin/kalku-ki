@@ -89,9 +89,14 @@ const server = http.createServer((req, res) => {
 
     const headers = { 'Content-Type': contentType };
 
-    // Cache immutable assets forever
+    // Cache immutable assets forever (hashed filenames)
     if (urlPath.startsWith('/assets/')) {
       headers['Cache-Control'] = 'public, max-age=31536000, immutable';
+    } else if (ext === '.html') {
+      // NEVER cache HTML — must always get latest to pick up new asset hashes
+      headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
+      headers['Pragma'] = 'no-cache';
+      headers['Expires'] = '0';
     }
 
     // Gzip if client accepts
