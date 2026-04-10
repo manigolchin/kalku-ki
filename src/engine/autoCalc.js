@@ -171,27 +171,82 @@ export async function autoCalculate(positions, options = {}) {
       p.confidence < 0.7 && p.long_text && p.long_text.length > 50
     );
 
-    // AI-classify unknown positions
+    // AI-classify unknown positions AND estimate Y/Z/X
     for (const pos of unknownPositions) {
       try {
         const aiClass = await classifyWithAI(pos);
-        if (aiClass?.validated && aiClass.category && aiClass.leistung) {
-          // Re-calculate this position with AI classification
+        if (!aiClass) continue;
+
+        if (aiClass.validated && aiClass.category && aiClass.leistung) {
+          // Maps to known Regelwerk → re-classify
           pos.classification = {
             id: `ai_${aiClass.leistung}`,
             category: aiClass.category,
             leistung: aiClass.leistung,
             modus: aiClass.modus || 'normal',
-            confidence: Math.min(aiClass.confidence || 0.75, 0.85), // cap AI confidence
+            confidence: Math.min(aiClass.confidence || 0.75, 0.85),
           };
+          pos.modus = aiClass.modus || 'normal';
           pos.kommentare.push(`KI-Klassifizierung: ${aiClass.category}.${aiClass.leistung}`);
-          if (aiClass.hinweise) {
-            pos.kommentare.push(...aiClass.hinweise);
+          aiStats.classified++;
+        } else {
+          // No Regelwerk match → use AI estimates directly for Y, Z, X
+          pos.modus = aiClass.modus || 'normal';
+          if (aiClass.arbeitszeit_schaetzung_min > 0) {
+            pos.Y = aiClass.arbeitszeit_schaetzung_min;
+            pos.time_minutes = aiClass.arbeitszeit_schaetzung_min;
+            pos.EP_lohn = Math.round((pos.Y / 60) * mergedParams.stundensatz * 100) / 100;
+            pos.kommentare.push(`KI-Arbeitszeit: ${pos.Y} min/${pos.unit}`);
           }
+          if (aiClass.geraete_eur_h > 0) {
+            pos.Z = aiClass.geraete_eur_h;
+            pos.EP_geraet = Math.round((pos.Y / 60) * pos.Z * 100) / 100;
+            pos.kommentare.push(`KI-Geräte: ${pos.Z} €/h`);
+          }
+          if (aiClass.ist_reine_arbeit) {
+            pos.X = 0;
+            pos.kommentare.push('KI: Reine Arbeitsleistung (X=0)');
+          }
+          // Recalculate EP/GP
+          pos.EP = Math.round(((pos.EP_lohn || 0) + (pos.EP_material || 0) + (pos.EP_geraet || 0) + (pos.EP_nu || 0)) * 100) / 100;
+          pos.GP = Math.round(pos.EP * (pos.quantity || 0) * 100) / 100;
+          pos.farbe = FARBEN.achtung; // rot — AI estimate
           aiStats.classified++;
         }
+        if (aiClass.hinweise?.length > 0) {
+          pos.kommentare.push(...aiClass.hinweise);
+        }
+        log('autoCalc', `  KI ${pos.oz}: Y=${pos.Y} Z=${pos.Z} X=${pos.X} modus=${pos.modus}`, {
+          short_text: (pos.short_text || '').slice(0, 50),
+          validated: aiClass.validated,
+        });
       } catch (err) {
-        console.error('AI classify error:', err);
+        log('autoCalc', `  KI Fehler ${pos.oz}: ${err.message}`, null, 'ERROR');
+      }
+    }
+
+    // Also fill Y/Z via AI for classified positions that have Y=0 (no Regelwerk value)
+    const missingYPositions = calcResult.positions.filter(p =>
+      p.modus === 'normal' && p.Y === 0 && !p.is_header &&
+      p.classification?.leistung && p.EP === 0
+    );
+    for (const pos of missingYPositions.slice(0, 10)) {
+      try {
+        const aiClass = await classifyWithAI(pos);
+        if (aiClass?.arbeitszeit_schaetzung_min > 0) {
+          pos.Y = aiClass.arbeitszeit_schaetzung_min;
+          pos.time_minutes = aiClass.arbeitszeit_schaetzung_min;
+          pos.Z = aiClass.geraete_eur_h || pos.Z || mergedParams.geraete_default;
+          pos.EP_lohn = Math.round((pos.Y / 60) * mergedParams.stundensatz * 100) / 100;
+          pos.EP_geraet = Math.round((pos.Y / 60) * pos.Z * 100) / 100;
+          pos.EP = Math.round(((pos.EP_lohn || 0) + (pos.EP_material || 0) + (pos.EP_geraet || 0)) * 100) / 100;
+          pos.GP = Math.round(pos.EP * (pos.quantity || 0) * 100) / 100;
+          pos.kommentare.push(`KI-Arbeitszeit: ${pos.Y} min/${pos.unit} (Z=${pos.Z})`);
+          pos.farbe = FARBEN.achtung;
+          log('autoCalc', `  KI Y-Fill ${pos.oz}: Y=${pos.Y} Z=${pos.Z}`, { short_text: (pos.short_text || '').slice(0, 50) });
+        }
+      } catch (err) {
+        log('autoCalc', `  KI Y-Fill Fehler ${pos.oz}: ${err.message}`, null, 'ERROR');
       }
     }
 
