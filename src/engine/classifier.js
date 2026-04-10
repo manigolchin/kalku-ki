@@ -244,15 +244,15 @@ const PATTERNS = [
   // ═══ §3 SCHÜTTGÜTER ═══
   {
     id: 'schuettgut_einbau',
-    category: 'schuettgueter', leistung: 'einbau_grossflaechig', // adjusted to kleinmenge at calc time if <200m²
+    category: 'schuettgueter', leistung: 'einbau_grossflaechig',
     triggers: {
       any: ['schotter', 'kies', 'splitt', 'sand', 'frostschutz', 'sts', 'schottertragschicht',
-            'tragschicht', 'sauberkeitsschicht', 'planie', 'rc-material', 'mineralgemisch',
-            'mineralbeton', 'kiesgemisch'],
+            'tragschicht', 'sauberkeitsschicht', 'rc-material', 'mineralgemisch',
+            'mineralbeton', 'kiesgemisch', 'ungebundene tragschicht'],
       regex_any: [/schüttgut|kiestragschicht|frostschutzschicht/],
-      none: ['pflaster', 'bord', 'beton c', 'fugenmaterial', 'bettung pflaster'],
+      none: ['pflaster', 'bord', 'beton c', 'fugenmaterial', 'bettung pflaster', 'mauer'],
     },
-    priority: 40,
+    priority: 55, // raised to beat betonieren (50)
   },
 
   // ═══ §4 PFLASTER & BORD ═══
@@ -281,19 +281,20 @@ const PATTERNS = [
     id: 'bordstein_setzen',
     category: 'pflaster_bord', leistung: 'bordstein_setzen',
     triggers: {
-      any: ['bord', 'bordstein', 'einfassung', 'randstein', 'betonbord'],
-      none: ['rückbau', 'aufnehmen', 'anpassen', 'tiefbord', 'vorhalt'],
+      any: ['bordstein', 'betonbord', 'randstein', 'rasenbord', 'einfassung'],
+      none: ['rückbau', 'aufnehmen', 'anpassen', 'tiefbord', 'betontiefbord', 'vorhalt', 'abbruch',
+             'mauerscheibe', 'sandstein', 'gummi', 'spielfeld'],
     },
-    priority: 60,
+    priority: 66, // higher than pflaster_anpassen
   },
   {
     id: 'tiefbord_setzen',
     category: 'pflaster_bord', leistung: 'tiefbord_setzen',
     triggers: {
-      any: ['tiefbord', 'tiefbordstein'],
-      none: ['rückbau', 'aufnehmen', 'anpassen'],
+      any: ['tiefbord', 'tiefbordstein', 'betontiefbord'],
+      none: ['rückbau', 'aufnehmen', 'anpassen', 'abbruch'],
     },
-    priority: 62,
+    priority: 68, // higher than pflaster_anpassen (65)
   },
   {
     id: 'schneiden_asphalt',
@@ -339,9 +340,10 @@ const PATTERNS = [
     id: 'betonieren',
     category: 'beton_abbruch', leistung: 'betonieren_rein',
     triggers: {
-      any: ['betonieren', 'beton einbau', 'beton herstell', 'ortbeton', 'fundament herstell',
-            'betonfundament', 'streifenfundament', 'punktfundament'],
-      none: ['abbruch', 'rückbau', 'aufnehmen', 'bord', 'pflaster'],
+      any: ['betonieren', 'ortbeton', 'betonfundament', 'streifenfundament', 'punktfundament',
+            'drainbeton', 'einzelfundament'],
+      none: ['abbruch', 'rückbau', 'aufnehmen', 'bord', 'pflaster', 'mauer', 'zaun',
+             'rohr', 'schacht', 'rinne', 'beleuchtung', 'kabel'],
     },
     priority: 50,
   },
@@ -351,11 +353,13 @@ const PATTERNS = [
     id: 'schacht_setzen',
     category: 'schwere_bauteile', leistung: 'schacht_setzen',
     triggers: {
-      any: ['schacht', 'kontrollschacht', 'revisionsschacht', 'sickerschacht'],
-      none: ['vorhalt', 'abdeckung nur', 'oberboden', 'substrat', 'tragschicht', 'geotextil',
+      all: ['schacht'],
+      regex_any: [/\bschacht\b.*\b(setzen|einbau|herstell|versetzen)\b|\b(kontrollschacht|revisionsschacht|sickerschacht)\b/],
+      none: ['vorhalt', 'oberboden', 'substrat', 'tragschicht', 'geotextil',
              'wurzel', 'graben', 'boden', 'kraut', 'vegetation', 'pflaster', 'bord',
-             'mauer', 'zaun', 'rohr', 'kabel', 'beleuchtung', 'mast', 'fundament',
-             'mulde', 'fläche', 'lockern', 'planieren', 'abtragen', 'entsorgen'],
+             'mauer', 'zaun', 'stabgitter', 'rohr', 'kabel', 'beleuchtung', 'mast',
+             'fundament', 'mulde', 'fläche', 'lockern', 'planieren', 'abtragen',
+             'entsorgen', 'baustelle', 'asphalt', 'sandstein', 'drainbeton'],
     },
     priority: 60,
   },
@@ -538,9 +542,9 @@ const PATTERNS = [
     id: 'mauer_herstellen',
     category: 'beton_abbruch', leistung: 'betonieren_inkl_schalung',
     triggers: {
-      any: ['trockenmauer', 'natursteinmauer', 'mauerscheibe', 'sandsteinmauer'],
-      regex_any: [/herstell|erricht|setzen|bau/],
-      none: ['abbruch', 'abtrag', 'rückbau'],
+      any: ['trockenmauer', 'natursteinmauer', 'mauerscheibe', 'sandsteinmauer herstell',
+            'einfassung aus mauerscheibe'],
+      none: ['abbruch', 'abtrag', 'rückbau', 'baustelleneinr', 'bauschutt'],
     },
     priority: 55,
   },
@@ -617,6 +621,15 @@ const PATTERNS = [
       none: [],
     },
     priority: 58,
+  },
+  {
+    id: 'einfassung_spielplatz',
+    category: 'pflaster_bord', leistung: 'bordstein_setzen',
+    triggers: {
+      any: ['einfassung spielplatz', 'einfassung spielfeld', 'einfassung spielfläche'],
+      none: ['mauerscheibe'],
+    },
+    priority: 67,
   },
   {
     id: 'fallschutzbelag_einbau',

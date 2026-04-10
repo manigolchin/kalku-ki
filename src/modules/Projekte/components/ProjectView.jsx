@@ -310,7 +310,7 @@ export default function ProjectView({ projectId, onBack, onRefresh }) {
           {/* Action Bar */}
           <div className="flex items-center gap-3 flex-wrap">
             <button
-              onClick={handleAutoCalc}
+              onClick={() => handleAutoCalc()}
               disabled={autoCalcRunning}
               className={clsx(
                 'inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold shadow-sm transition-all duration-200',

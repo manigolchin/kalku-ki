@@ -305,7 +305,7 @@ export async function autoCalculate(positions, options = {}) {
 
     // If AI classified or priced positions, re-calculate entire project
     if (aiStats.classified > 0 || aiStats.priced > 0) {
-      const reCalc = calculateProject(positions, mergedParams, priceMap);
+      const reCalc = calculateProject(positions, mergedParams, safePriceMap);
       // Replace positions AND summary with fresh calculation
       calcResult.positions = reCalc.positions;
       calcResult.summary = reCalc.summary;
